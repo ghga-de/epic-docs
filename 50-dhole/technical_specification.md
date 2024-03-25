@@ -240,10 +240,134 @@ B. For merging relation properties:
   ```
 
 ### Refactor aggregate transformation:
-TBD.
+
+The former `aggregate` transformation shall be replaced by a mixture of existing
+and to be written transformations. The following new transformations shall be
+implemented:
+
+#### Transformation 1: Add Subschema
+
+A transformation that enables the insertion of a subschema into a new property
+of any object within the current content schema of a class, including an initial
+value. The configuration may look as follows:
+
+```yaml
+# Generic Example
+- class: MyClass
+  target_path: [path, of, properties]
+  schema:
+    type: "object"
+    additionalProperties: false
+  value: {}
+
+# Examples from current config
+- class: Dataset
+  target_path: [datasets]
+  schema:
+    type: object
+    additionalProperties: false
+    properties:
+      stats:
+        type: object
+        additionalProperties: false
+- class: Dataset
+  target_path: [studies_summary]
+  schema:
+    type: object
+    additionalProperties: false
+    properties:
+      stats:
+        type: object
+        additionalProperties: false
+```
+
+* The transformation shall check whether the specified `target_path` is valid, i.e. all but the last elements are objects and the property does not yet exist.
+
+#### Transformation 2: Count References
+
+* The transformation shall count how many target objects are referenced from each source object given the reference name.
+* The transformation shall validate whether the target is defined with multiplicity and fail otherwise
+
+Example config:
+
+```yaml
+- class: Dataset
+  target_path: [samples_summary, count]
+  source_path: [samples]
+```
+
+####  Transformation 3: Count content values
+
+* The transformation shall count the values encountered at a specified property in the content of an object.
+* The transformation shall validate that at least one of the traversed references is multi-valued by its cardinality or one of the traversed content elements is an array.
+* The path to the content property is specified as the list of references to traverse (`source_path.reference`) and the list of content objects to traverse (`source_path.content`).
+* The terminal element of the `source_path.content` configuration is the name of the property to be created to hold the resulting value. It is added to the schema by the transformation and has the following schema:
+  ```yaml
+  type: object
+  additionalProperties: true
+  ```
+  where each observed value will be mapped to an integer value representing the
+  number of times it was observed
+
+Draft Config:
+
+```yaml
+- class: Dataset
+  target_path: [samples_summary, stats, sex]
+  source_path:
+    reference: [individuals]
+    content: [sex]
+- class: Dataset
+  target_path: [samples_summary, stats, tissues]
+  source_path:
+    reference: [biospecimens]
+    content: [tissue]
+```
+
+#### Transformation 4: Arithmetic Operation
+
+* Similarly to the previous transformation, this transformation does not count the element occurrences but enables arithmetic operations on the yielded elements.
+* The transformation shall validate that the type of the configured source element allows arithmetic operations (number, integer, boolean).
+* The type of the resulting subschema shall be that of the source subschema.
+* The transformation shall offer a SUM operator. For future purposes other operators such as MEAN may be useful.
+
+Draft Config:
+
+```yaml
+- class: Dataset
+  target_path: [files_summary, stats, size]
+  source_path:
+    reference: [files]
+    content: [size]
+  operator: SUM
+```
+
+#### Transformation 5: Copy
+
+* The transformation shall enable copying the values from one content location (of potentially a referenced class) to another content location.
+* The type of the resulting subschema shall be that of the source subschema.
+
+Draft Config:
+
+```yaml
+- class: Dataset
+  target_path: [dac_email]
+  source_path:
+    references: [data_access_policy, data_access_committee]
+    content: [email]
+```
+
+#### Transformation 6: Delete Reference
+
+As the name suggests.
+
+#### Transformation 7: Delete Content Subschema
+
+As the name suggests, following the conventions used in the aforementioned transformations.
+
 
 ## Human Resource/Time Estimation:
 
 Number of sprints required: 1
 
-Number of developers required: multipe
+Number of developers required: multiple
