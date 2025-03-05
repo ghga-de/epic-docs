@@ -42,6 +42,8 @@ Dealing with metrics and logs through OpenTelemetry.
 Potentially there are some trade offs to be made both for the Jaeger deployment and when choosing autoinstrumentation vs manual instrumentation.
 Depending on the answers to some of the open questions, there might be some additional implementation work included, but overall no major code changes should be needed in either case.
 
+Implementation work will use the `otel_test` branches of hexkit and the file services backend monorepo as starting point.
+
 ## Human Resource/Time Estimation:
 
 Number of sprints required: 1
