@@ -24,7 +24,7 @@ If autoinstrumentation can be used in all/most cases, additional implementation 
 
 The following list of (auto)instrumentation libraries have been used during exploration and seem the most promising:
 
-```
+```python
 opentelemetry-api
 opentelemetry-sdk
 opentelemetry-exporter-otlp
