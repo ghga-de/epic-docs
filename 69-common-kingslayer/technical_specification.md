@@ -89,6 +89,10 @@ async def my_other_dummy_endpoint():
 This will produce a very lightweight span in both cases, which can be enriched with additional (meta)data, if desired.
 For this purpose, the context manager is more flexible, as additional span data can be populated dynamically within the function body, while the decorator can only be enriched with statically available data.
 
+#### Correlation ID
+It is not fully clear if we can inject and thus reuse our existing correlation ID within the OpenTelemetry framework.
+With the current understanding of how context propagation across services works, this might be as easy as renaming the corresponding headers for both HTTP requests and Kafka events to something that OpenTelemetry understands.
+The open question here is if autoinstrumentation libraries would interfere with this and overwrite the value or if, conversely, we might need to intercept autoinstrumentation headers and modify them.
 
 #### Hexkit/Service Commons:
 Hexkit needs some changes introducing logic around event subscribers to correctly propagate tracing context across service boundaries as the autoinstrumentation for Kafka does not open a new child span, ending the propagation at the event subscriber.
