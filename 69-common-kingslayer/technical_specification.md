@@ -52,7 +52,7 @@ If any of these third-party libraries are not fit for our use case, they need to
 Additional manual instrumentation can be provided by creating a global `TracerProvider` and opening spans within the code using either contextmanagers or decorators.
 By default these will attach to an existing parent span generating a hierarchy of subspans across services.
 Additionally, to traverse service boundaries, HTTP and Kafka headers are populated with the necessary information, which is extracted at the receving end.
-Some additional code dealing with this process will be required, if the corresponding autoinstrumentation library is not used.
+Some additional code dealing with this process will be required, if the corresponding autoinstrumentation library is not used which can be implemented in hexkit for Kafka, MongoDB and boto or as middleware in ghga-service-commons for HTTP operations.
 
 As a basic example, assume a parent span already exists for a FastAPI application, then a custom subspan could be opened with the following code
 
