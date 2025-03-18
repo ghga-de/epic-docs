@@ -37,7 +37,7 @@ opentelemetry-instrumentation-fastapi
 opentelemetry-instrumentation-httpx
 opentelemetry-instrumentation-pymongo
 opentelemetry-instrumentation-requests
-````
+```
 
 While there is an asyncio autoinstrumentation library, it did not provide any further value to what's already covered by the other libraries.
 Additionally, the logging autoinstrumentation can be ignored as we are focusing on tracing.
