@@ -10,31 +10,45 @@
       new_class_name: DatasetSummary
 
   - name: infer_relation
-    description: "Infer samples for each DatasetSummary"
+    description: "Infer {{ item.merge_relation_name }} for each DatasetSummary"
     args:
       class_name: DatasetSummary
-      relation_name: samples
-      paths:
-      - "DatasetSummary(research_data_files)>ResearchDataFile(experiments)>Experiment(samples)>Sample"
-      - "DatasetSummary(process_data_files)>ProcessDataFile(analysis)>Analysis(research_data_files)>ResearchDataFile(experiments)>Experiment(samples)>Sample"
+      relation_name: "{{ item.relation_name }}"
+      path: "{{ item.path }}"
+    loop:
+    - relation_name: samples_via_research_data_files
+      path: "DatasetSummary(research_data_files)>ResearchDataFile(experiments)>Experiment(samples)>Sample"
+    - relation_name: samples_via_process_data_files
+      path: "DatasetSummary(process_data_files)>ProcessDataFile(analysis)>Analysis(research_data_files)>ResearchDataFile(experiments)>Experiment(samples)>Sample"
+    - relation_name: experiments_via_research_data_files
+      path: "DatasetSummary(research_data_files)>ResearchDataFile(experiments)>Experiment"
+    - relation_name: experiments_via_process_data_files
+      path: "DatasetSummary(process_data_files)>ProcessDataFile(analysis)>Analysis(research_data_files)>ResearchDataFile(experiments)>Experiment"
+    - relation_name: individuals_via_research_data_files
+      path: "DatasetSummary(research_data_files)>ResearchDataFile(experiments)>Experiment(samples)>Sample(individual)>Individual"
+    - relation_name: individuals_via_process_data_files
+      path: "DatasetSummary(process_data_files)>ProcessDataFile(analysis)>Analysis(research_data_files)>ResearchDataFile(experiments)>Experiment(samples)>Sample(individual)>Individual"
 
-  - name: infer_relation
-    description: "Infer experiments for each DatasetSummary"
+  - name: merge_relations
+    description: "Create {{ item.target_relation }} relation for each DatasetSummary"
     args:
       class_name: DatasetSummary
-      relation_name: experiments
-      paths:
-      - "DatasetSummary(research_data_files)>ResearchDataFile(experiments)>Experiment"
-      - "DatasetSummary(process_data_files)>ProcessDataFile(analysis)>Analysis(research_data_files)>ResearchDataFile(experiments)>Experiment"
-
-  - name: infer_relation
-    description: "Infer individuals for each DatasetSummary"
-    args:
-      class_name: DatasetSummary
-      relation_name: individuals
-      paths:
-      - "DatasetSummary(research_data_files)>ResearchDataFile(experiments)>Experiment(samples)>Sample(individual)>Individual"
-      - "DatasetSummary(process_data_files)>ProcessDataFile(analysis)>Analysis(research_data_files)>ResearchDataFile(experiments)>Experiment(samples)>Sample(individual)>Individual"
+      source_relations: "{{ item.source_relations }}"
+      target_relation: "{{ item.target_relation }}"
+      description: "The {{ item.target_relation }} related to the dataset."
+      mandatory:
+        source: false
+        target: false
+      multiple:
+        source: true
+        target: true
+    loop:
+    - source_relations: [samples_via_research_data_files, samples_via_process_data_files]
+      target_relation: samples
+    - source_relations: [experiments_via_research_data_files, experiments_via_process_data_files]
+      target_relation: experiments
+    - source_relations: [individuals_via_research_data_files, individuals_via_process_data_files]
+      target_relation: individuals
 
   - name: transform_content
     description: "Add stats content"
