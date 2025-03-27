@@ -22,11 +22,11 @@ The workflow shall be specified as indicated by the following examples:
 ```yaml
 - input: input_schema_name # input schema
   steps:
-  - operation: some_transformation
+  - name: some_transformation
     description: some description
     args:
       {} # transformation config
-  - operation: other_transformation
+  - name: other_transformation
     args:
       {} # ...
 ```
@@ -46,11 +46,11 @@ allowing for multiple slots in multiple classes to be deleted. Following the log
 ```yaml
 - input: input_schema_name # input schema
   steps:
-  - operation: delete_relation
+  - name: delete_relation
     args:
       class_name: ClassOne
       relation_name: slot_a
-  - operation: delete_relation
+  - name: delete_relation
     args:
       class_name: ClassOne
       relation_name: slot_b
@@ -62,7 +62,7 @@ To generically solve the frequent use case of executing the same operation on mu
 ```yaml
 - input: input_schema_name # input schema
   steps:
-  - operation: delete_relation
+  - name: delete_relation
     description: "Delete relation {{ item.relation_name }} from class {{ item.class }}"
     args:
       class_name: "{{ item.class }}"
@@ -100,8 +100,6 @@ class WorkflowTemplate:
 ```
 
 Templating the loop logic for each list item will then resolve every item to a list of items where the properties `name`, `description` and `args` were re-serialized, templated for each `loop` item and de-serialized.
-
-
 
 ### Included / Required
 

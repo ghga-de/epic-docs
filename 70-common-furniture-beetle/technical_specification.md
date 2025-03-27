@@ -28,7 +28,7 @@ ID, relations and content will be identical in the new class. All object will be
 
 #### Delete Class
 
-This transformation shall delete a class from the schema. All objects of this class type in the data shall also be removed, including their references from other classes.
+This transformation shall delete a class from the schema. All objects of this class type in the data shall also be removed, including all references in all classes that are of the type of the deleted class.
 
 Example Config:
 
