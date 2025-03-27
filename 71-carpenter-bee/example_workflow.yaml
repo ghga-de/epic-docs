@@ -23,18 +23,18 @@
     args:
       class_name: DatasetSummary
       relation_name: experiments
-    paths:
-    - "DatasetSummary(research_data_files)>ResearchDataFile(experiments)>Experiment"
-    - "DatasetSummary(process_data_files)>ProcessDataFile(analysis)>Analysis(research_data_files)>ResearchDataFile(experiments)>Experiment"
+      paths:
+      - "DatasetSummary(research_data_files)>ResearchDataFile(experiments)>Experiment"
+      - "DatasetSummary(process_data_files)>ProcessDataFile(analysis)>Analysis(research_data_files)>ResearchDataFile(experiments)>Experiment"
 
   - name: infer_relation
     description: "Infer individuals for each DatasetSummary"
     args:
       class_name: DatasetSummary
       relation_name: individuals
-    paths:
-    - "DatasetSummary(research_data_files)>ResearchDataFile(experiments)>Experiment(samples)>Sample(individual)>Individual"
-    - "DatasetSummary(process_data_files)>ProcessDataFile(analysis)>Analysis(research_data_files)>ResearchDataFile(experiments)>Experiment(samples)>Sample(individual)>Individual"
+      paths:
+      - "DatasetSummary(research_data_files)>ResearchDataFile(experiments)>Experiment(samples)>Sample(individual)>Individual"
+      - "DatasetSummary(process_data_files)>ProcessDataFile(analysis)>Analysis(research_data_files)>ResearchDataFile(experiments)>Experiment(samples)>Sample(individual)>Individual"
 
   - name: transform_content
     description: "Add stats content"
