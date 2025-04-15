@@ -10,7 +10,7 @@
       new_class_name: DatasetSummary
 
   - name: infer_relation
-    description: "Infer {{ item.merge_relation_name }} for each DatasetSummary"
+    description: "Infer {{ item.relation_name }} for each DatasetSummary"
     args:
       class_name: DatasetSummary
       relation_name: "{{ item.relation_name }}"
