@@ -30,6 +30,43 @@ e.g. function doc strings, but it is not explicitly required. The work in this e
 is of a broader and less granular nature meant to provide a cohesive knowledge base
 for developers. API documentation should already be performed as a matter of course.
 
+### Additional Implementation Details
+The following is one example of a possible structure for the documentation:
+
+- Architecture Concepts
+  - Triple Hexagonal Architecture
+  - Event-Driven Architecture
+- Protocols
+  - Existing protocols
+  - Adding protocols
+- Providers
+  - S3
+    - Overview
+    - Test utilities
+      - Container fixture and fixture reset/cleanup function
+      - Accompanying fixtures/utilities
+  - Kafka
+    - Overview
+    - Outbox Pattern
+    - Persistent Publisher
+    - When to use outbox vs persistent publisher
+    - DLQ
+    - Test utilities
+      - Container fixture and fixture reset/cleanup function
+  - MongoDB
+    - Overview
+    - Role in outbox pattern
+    - Role in persistent publisher
+    - Test utilities
+      - Container fixture and fixture reset/cleanup function
+- Adding providers
+- Glossary
+- Usage Examples
+  - Basic Kafka Pub/Sub
+  - Basic DAO
+  - Basic S3
+  - Dependency Injection (as in most of our `inject.py` modules)
+
 
 ## Human Resource/Time Estimation:
 
