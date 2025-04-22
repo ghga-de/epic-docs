@@ -67,4 +67,4 @@ by the data stewards (e.g., reason for rejecting a request, internal notes, tick
 ## Human Resource/Time Estimation:
 
 Number of sprints required: 1
-Number of developers required: 1
+Number of developers required: 2
