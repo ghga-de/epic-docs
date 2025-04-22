@@ -12,23 +12,21 @@ The goal of this epic is to implement workflows in metldata. In contrast to the 
 
 In this epic, the following shall be implemented:
 
-* A yaml-serializable WorkflowDefinition class according to the specification below
-* Functionality to execute a workflow, given a schemapack, datapack and WorkFlowDefinition
+* a yaml-serializable WorkflowDefinition class according to the specification below
+* functionality to execute a workflow, given a schemapack, datapack and workflow definition.
 
 ### Workflow Language
 
 The workflow shall be specified as indicated by the following examples:
 
 ```yaml
-- input: input_schema_name # input schema
-  steps:
-  - name: some_transformation
-    description: some description
-    args:
-      {} # transformation config
-  - name: other_transformation
-    args:
-      {} # ...
+- name: some_transformation
+  description: some description
+  args:
+    {} # transformation config
+- name: other_transformation
+  args:
+    {} # ...
 ```
 
 Originally the data transformation was described in two layers: A _workflow_ comprising _workflow steps_ which correspond to a single transformation, hard coded in Python with a release cycle bound to that of metldata. And a corresponding configuration file configuring each workflow step with the config schema being defined by the transformation executed in the workflow step.
@@ -44,62 +42,89 @@ ClassThree: [slot_x, slot_y]
 allowing for multiple slots in multiple classes to be deleted. Following the logic of this workflow language, this would become
 
 ```yaml
-- input: input_schema_name # input schema
-  steps:
-  - name: delete_relation
-    args:
-      class_name: ClassOne
-      relation_name: slot_a
-  - name: delete_relation
-    args:
-      class_name: ClassOne
-      relation_name: slot_b
+- name: delete_relation
+  args:
+    class_name: ClassOne
+    relation_name: slot_a
+- name: delete_relation
+  args:
+    class_name: ClassOne
+    relation_name: slot_b
 # ... followed by three more invocations of the delete_relation transformation
 ```
 
 To generically solve the frequent use case of executing the same operation on multiple targets, the specification shall allow for simple loops, similarly to the Ansible language as described [here](https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_loops.html#using-loops):
 
 ```yaml
-- input: input_schema_name # input schema
-  steps:
-  - name: delete_relation
-    description: "Delete relation {{ item.relation_name }} from class {{ item.class }}"
-    args:
-      class_name: "{{ item.class }}"
-      relation_name:  "{{ item.relation_name }}"
-    loop:
-    - class_name: ClassOne
-      relation_name: slot_a
-    - class_name: ClassOne
-      relation_name: slot_b
-    - class_name: ClassTwo
-      relation_name: slot_k
-    - class_name: ClassThree
-      relation_name: slot_x
-    - class_name: ClassThree
-      relation_name: slot_y
-    - class_name: ClassThree
-      relation_name: slot_z
+- name: delete_relation
+  description: "Delete relation {{ item.relation_name }} from class {{ item.class }}"
+  args:
+    class_name: "{{ item.class }}"
+    relation_name:  "{{ item.relation_name }}"
+  loop:
+  - class_name: ClassOne
+    relation_name: slot_a
+  - class_name: ClassOne
+    relation_name: slot_b
+  - class_name: ClassTwo
+    relation_name: slot_k
+  - class_name: ClassThree
+    relation_name: slot_x
+  - class_name: ClassThree
+    relation_name: slot_y
+  - class_name: ClassThree
+    relation_name: slot_z
 ```
 
 ### Implementation Detail
 
-Templating the loop logic can be achieved using a minimal data model for the initial deserialization of the YAML file, followed by YAML or JSON serialization, templating and re-deserialization into the actual operation models. The initial pre-templating model may be specified as
+The processing of workflows shall be implemented in two stages:
+
+1. The resolution of all "loop" specifications by expanding every workflow step precursor with a loop specification into multiple workflow steps.
+1. The execution of the workflow steps
+
+#### Expansion of loops
+
+Initially, the loop specifications shall be used to expand every workflow step precursor into (potentially) multiple workflow steps. Templating the loop logic can be achieved using a minimal data model for the initial deserialization of the YAML file, followed by YAML or JSON serialization, templating and re-deserialization into the actual operation models. The initial pre-templating model may be specified as
+
+Assuming the following hypothetical model hierarchy
 
 ```Python
-class StepTemplate:
-    name: str
-    description: str
-    args: dict
-    loop: list
+class WorkflowStepBase:
+  # Common base model that makes no assumption about the config type and
+  # lacks loop specification
+  name: str
+  description: str
+  args: object
 
-class WorkflowTemplate:
-    input: str
-    output: str
-    steps: list[StepTemplate]
+class WorkflowStepPrecursor(WorkflowStepBase):
+  # Precursor model with loop specification
+  loop: list[object] = []
+
+class WorkflowStep[TConfig](WorkflowStepBase):
+  # Fully derived workflow step model
+  args: TConfig
 ```
 
-Templating the loop logic for each list item will then resolve every item to a list of items where the properties `name`, `description` and `args` were re-serialized, templated for each `loop` item and de-serialized.
+The expansion may be implemented as
+
+```Python
+def apply_template(template: str) -> str:
+  # some jinja
+  ...
+
+def expand_loop(precursor: WorkflowStepPrecursor) -> list[WorkflowStepBase]:
+  precursor_json = precursor.json()
+  del precursor_json['loop']
+
+  return [
+    WorkflowStepBase.model_validate_json(apply_template(precursor_json, item))
+    for item in precursor.loop
+    ]
+
+def expand_loops(precursors: list[WorkflowPrecursor]) -> list[WorkflowStepBase]:
+  ...
+```
 
 ### Included / Required
 
