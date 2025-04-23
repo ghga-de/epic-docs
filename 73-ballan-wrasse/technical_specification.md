@@ -19,7 +19,8 @@ by the data stewards (e.g., reason for rejecting a request, internal notes, tick
   when the request is approved.
 - Data stewards should be able to add a note to the requester
   (e.g., reason for denial of an access request or modified validity period).
-- Data stewards should be able to add a ticket ID and internal notes.
+- Data stewards should be able to add internal notes and the corresponding ticket ID
+  associated with the request in the external help desk system.
 - The data presented to the data steward in the access request manager
   and sent in the notification to the data steward should be enriched
   with existing information about the request and the dataset (e.g., DAC).
@@ -39,7 +40,7 @@ by the data stewards (e.g., reason for rejecting a request, internal notes, tick
     in the access request, and change the state of deleted requests to "deleted."
   - Do not allow POST/PATCH requests for deleted datasets.
   - Provide the corresponding dataset title and DAC along with the request.
-- Metadata:
+- Metldata:
   - The `MetadataDatasetOverview` event must be supplemented
     with the name of the corresponding DAC.
 - Work Package Service:
