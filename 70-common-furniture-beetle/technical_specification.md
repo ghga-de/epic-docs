@@ -66,6 +66,9 @@ class_name: SomeClass
 relation_name: some_new_relation
 relation_path: "SomeClass(some_relation)>OtherClass"
 ```
+
+The transformations implemented as a part of Dhole epic `count_content_values`, `count_references`, `sum_operation`, `delete_content_subschema`, `copy_content` and `add_content_properties` are related with the content schema transformations. These will be replaced by the `transform_content` transformation. Thus, they will not be subject to refactoring. Any existing content schema transformation resolving an indirect path will be represented with two transformations; one for resolving the the path and adding the relation (with `infer_relations`), the other one transforming the content (with `transform_content`). 
+
 ## Human Resource/Time Estimation:
 
 Number of sprints required: ?
