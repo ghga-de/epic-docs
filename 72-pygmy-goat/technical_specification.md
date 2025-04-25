@@ -19,16 +19,12 @@ an external service, such as the internal docs site.
 ### Included/Required:
 The following points should be covered in the documentation:
 - Glossary
-- Usage Examples
-- Architectural Concepts (Triple Hexagonal Architecture, DLQ, Outbox, DAOs, etc.)
-- Testing Tools (persistent vs clean fixtures, session-scoped containers, etc.)
+- Update, improve and expand the existing code in the examples directory
+  - Document these examples, and add some more usage examples if needed
+- Architectural Concepts (Triple Hexagonal Architecture, DLQ, Outbox, DAOs, etc.) Testing Tools (persistent vs clean fixtures, session-scoped containers, etc.)
 - Requirements for adding new functionality, e.g. new protocols or new DAO providers
+- Auto-generated API reference docs
 
-### Not included:
-The work in this epic might include some API documentation or make improvements to,
-e.g. function doc strings, but it is not explicitly required. The work in this epic
-is of a broader and less granular nature meant to provide a cohesive knowledge base
-for developers. API documentation should already be performed as a matter of course.
 
 ### Additional Implementation Details
 The following is one example of a possible structure for the documentation:
@@ -57,19 +53,25 @@ The following is one example of a possible structure for the documentation:
     - Overview
     - Role in outbox pattern
     - Role in persistent publisher
+    - Migration Tools
     - Test utilities
       - Container fixture and fixture reset/cleanup function
 - Adding providers
 - Glossary
-- Usage Examples
+- Usage Examples should include the following, if they don't already:
   - Basic Kafka Pub/Sub
   - Basic DAO
   - Basic S3
   - Dependency Injection (as in most of our `inject.py` modules)
+  - Logging
+  - Correlation IDs
+  - Migration Tools
+- Logging
+- Correlation IDs
 
 
 ## Human Resource/Time Estimation:
 
-Number of sprints required: 1
+Number of sprints required: 2
 
 Number of developers required: 2
