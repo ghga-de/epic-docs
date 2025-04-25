@@ -12,8 +12,9 @@ fashion, with files spread across Confluence, Google Docs, and the internal docs
 site. However, developers or even hypothetical third parties working with or
 contributing to `hexkit` do not currently have access to the comprehensive and
 consolidated documentation that the library warrants. This epic will remedy that.
-The aggregated documentation can be located within the library as a README or within
-an external service, such as the internal docs site.
+The aggregated documentation will be written in Markdown and processed using MkDocs.
+Optionally, we can publish it using GitHub Pages. This approach ensures accessibility
+for both internal developers and third parties.
 
 
 ### Included/Required:
@@ -21,7 +22,8 @@ The following points should be covered in the documentation:
 - Glossary
 - Update, improve and expand the existing code in the examples directory
   - Document these examples, and add some more usage examples if needed
-- Architectural Concepts (Triple Hexagonal Architecture, DLQ, Outbox, DAOs, etc.) Testing Tools (persistent vs clean fixtures, session-scoped containers, etc.)
+- Architectural Concepts (Triple Hexagonal Architecture, DLQ, Outbox, DAOs, etc.)
+- Testing Tools (persistent vs clean fixtures, session-scoped containers, etc.)
 - Requirements for adding new functionality, e.g. new protocols or new DAO providers
 - Auto-generated API reference docs
 
