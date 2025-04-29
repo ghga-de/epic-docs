@@ -85,9 +85,7 @@ The processing of workflows shall be implemented in two stages:
 
 #### Expansion of loops
 
-Initially, the loop specifications shall be used to expand every workflow step precursor into (potentially) multiple workflow steps. Templating the loop logic can be achieved using a minimal data model for the initial deserialization of the YAML file, followed by YAML or JSON serialization, templating and re-deserialization into the actual operation models. The initial pre-templating model may be specified as
-
-Assuming the following hypothetical model hierarchy
+Initially, the loop specifications shall be used to expand every workflow step precursor into (potentially) multiple workflow steps. Templating the loop logic can be achieved using a minimal data model for the initial deserialization of the YAML file, followed by YAML or JSON serialization, templating and re-deserialization into the actual operation models. The initial pre-templating model may be specified as the following hypothetical model hierarchy
 
 ```Python
 class WorkflowStepBase:
