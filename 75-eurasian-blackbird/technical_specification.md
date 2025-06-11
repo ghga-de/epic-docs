@@ -44,8 +44,7 @@ have problems:
 
 If all Kafka events have a standard UUID header, stored and revived like the
 correlation ID, then deduplication becomes significantly easier. Services can store
-the IDs and perform an idempotence check atomically via `.insert()`. If events are
-replayed or republished, 
+the IDs and perform an idempotence check atomically via `.insert()`.
 
 In the case that an inbound event's ID collides with that of another event in a
 deduplication store, the event will go to the DLQ and we can just give it another ID.
@@ -66,11 +65,16 @@ Hexkit:
     - Generate the `event_id` so as to know & store the value.
     - Ensure `event_id` is stored and successfully reused during republish.
       - Generate and store `event_id` if it doesn't exist during republish.
-    - Rename that `event_id` variable to `compaction_key` (no side effect).
+    - Rename that `event_id` variable to `compaction_key` or similar (no side effect).
   - DAO Pub (outbox):
-    - Generate and store `event_id`, like the Persistent Publisher.
-    - Ensure `event_id` is stored and successfully reused during republish.
-      - Generate and store `event_id` if it doesn't exist during republish.
+    - Here, `event_id` should only be stored, not reused during republish. The stored
+      value should reflect the ID of the event created the last time the DTO was 
+      published to Kafka, to be used for traceability only.
+      - Every time outbox events are republished, they'll have a *new* `event_id`.
+      - The outbox events are intended to be stored by consumers, so idempotence
+        is not performed via `event_id`. This is why we won't update the daosub
+        protocol or try to reuse the previous `event_id` when republishing outbox
+        events.
 
 NOS:
 - Grab new version of `hexkit`.
