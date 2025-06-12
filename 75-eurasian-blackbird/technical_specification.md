@@ -8,7 +8,7 @@ Epic planning and implementation follow the
 ## Scope
 ### Outline:
 The aim of this epic is to provide Kafka event identification for deduplication by
-canonizing a UUID header for all events (`event_id`). The `NOS`, `NS`, and `DLQS` will
+canonizing a UUID4 header for all events (`event_id`). The `NOS`, `NS`, and `DLQS` will
 receive updates targeting this change after updating `hexkit`.
 
 Changes for `hexkit` should be included in the same release as the changes from the
@@ -42,7 +42,7 @@ have problems:
 - *Semantic Dedupe Key*: heterogeneous format, possibility to clash
 - *All of the above*: vulnerable to upstream republish post-DB migration
 
-If all Kafka events have a standard UUID header, stored and revived like the
+If all Kafka events have a standard UUID4 header, stored and revived like the
 correlation ID, then deduplication becomes significantly easier. Services can store
 the IDs and perform an idempotence check atomically via `.insert()`.
 
@@ -56,16 +56,19 @@ Hexkit:
   - Event Sub: expose `event_id` header to translators (similar to "type_")
 - Providers:
   - Event Sub: 
-    - Update extract `event_id` header and pass to translator.
+    - Extract `event_id` header, convert to UUID4, and pass to translator.
       - This should *replace* the `event_id` used by the DLQ.
     - Move the `service` info to its own header in the DLQ case.
   - Event Pub:
-    - Generate UUID to use as `event_id`, but allow it to be provided as an argument.
+    - Generate UUID4 to use as `event_id` if no value is provided as an argument.
   - Persistent Pub:
-    - Generate the `event_id` so as to know & store the value.
+    - Generate the `event_id` explicitly instead of relying on the underlying provider 
+      to generate it automatically. That way, we know the value and can store it.
     - Ensure `event_id` is stored and successfully reused during republish.
       - Generate and store `event_id` if it doesn't exist during republish.
-    - Rename that `event_id` variable to `compaction_key` or similar (no side effect).
+    - There is already a one-off variable named `event_id` in `publish_validated()`,
+      which we need to rename to avoid confusion. New name should be `compaction_key`
+      or similar (should not produce any side effects).
   - DAO Pub (outbox):
     - Here, `event_id` should only be stored, not reused during republish. The stored
       value should reflect the ID of the event created the last time the DTO was 
