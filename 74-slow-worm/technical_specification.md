@@ -19,8 +19,12 @@ The `hexkit` changes for this epic should be released with the Eurasian Blackbir
 - Rollout:
   - Update `ghga-service-commons`, followed by `ghga-event-schemas`, then other services
     - Update to new `hexkit` version
+    - Update references to `correlation_id` that are str-typed
     - Replace string UUIDs and Datetimes in tests and service code
     - Write migrations for all services that store UUIDs and Datetimes as strings
+  
+### Deployment Note:
+The `NS`'s `notifications` collection should be dropped once deployment is complete.
 
 ## API Definitions:
 
@@ -60,12 +64,21 @@ Changes needed:
 - Adding or adapting tests to verify the new functionality. Tests should also verify
   that publishing DTOs to Kafka still works, especially in the case of the MongoKafka
   provider.
+- Update Correlation ID canonical type to `UUID` (from `str`)
 
 ### Database Migrations:
 
 We need to author migrations for any services storing str-based UUID or Datetime fields.
 This not only includes models defined in `ghga-event-schemas` or the services 
-themselves, but also any persisted event data due to the `created` field. 
+themselves, but also any persisted event data due to the `created` field.
+Stored correlation IDs have to be updated, too, though this primarily affects
+outbox publishers. 
+
+The `NS` currently stores correlation IDs as part of its idempotence
+check, but that will be supplanted in the Eurasian Blackbird epic. As a result, it
+shouldn't be migrated. If problematic, we can disable tests temporarily to satisfy CI 
+checks until both epics are complete.
+
 List of services that require migrations:
 - IFRS
 - FIS
