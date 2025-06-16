@@ -49,11 +49,8 @@ For more information on the HTTP API, see endpoint definitions below.
 - Create new core class w/ outbox publisher
 - Write Unit and Integration Tests
 
-### Optional:
-\<List any optional features that may or may not be realized as part of this epic.\>
-
 ### Not included:
-\<List features that will not be addressed as part of this epic.\>
+Archive test bed integration, Study Repository Service development, or front end work.
 
 ## User Journeys
 
@@ -124,17 +121,31 @@ successful.
 ### Payload Schemas for Events:
 
 ```python
+class UploadContextState(StrEnum):
+    """The allowed states for an UploadContext instance"""
+
+    OPEN = "open"
+    LOCKED = "locked"
+    CLOSED = "closed"
+
 class UploadContext(BaseModel):
-    """An upload context"""
+    """A class representing an Upload Context"""
+
     upload_context_id: UUID4 # unique identifier for the instance
-    state: str  # one of OPEN, LOCKED, CLOSED
+    state: UploadContextState  # one of OPEN, LOCKED, CLOSED
     file_uploads: list[FileUpload]  # use list function for default_factory
-```
-```python
+
+class FileUploadState(StrEnum):
+    """The allowed states for a FileUpload instance"""
+
+    INIT = "init"
+    COMPLETED = "completed"
+
 class FileUpload(BaseModel):
     """A File Upload"""
+
     upload_id: UUID4
-    state: str  # one of INIT, COMPLETED
+    state: FileUploadState  # one of INIT, COMPLETED
     original_path: str
     checksum: str
 ```
@@ -144,8 +155,12 @@ class FileUpload(BaseModel):
 
 
 ### Testing
-Tests need to cover at least the following (not exhaustive):
-- 
+Tests need to cover at least the following items (not exhaustive):
+- Standard endpoint authentication battery
+- Happy path for each endpoint
+- Core error translation for HTTP API for each endpoint
+- Disallow changing status of a CLOSED UploadContext
+- Disallow removing a file from a CLOSED UploadContext
 
 
 ## Human Resource/Time Estimation:
