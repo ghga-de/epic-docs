@@ -76,4 +76,5 @@ The service configuration shall allow renaming the sheets according to a map. It
 ## Human Resource/Time Estimation:
 
 Number of sprints required: 1
+
 Number of developers required: 2
