@@ -69,6 +69,13 @@ Service. If a valid encrypted access token is supplied with the request, the UCS
 updates the state of the `UploadContext` to `LOCKED`, `CLOSED`, or `OPEN`, as
 specified by the request. If the `UploadContext` is already in the given state, nothing
 happens and the UCS returns a successful response.
+The initial state of the `UploadContext` is `OPEN`. When the user is finished uploading
+files, they can use the Data Portal to set the Context to a semi-finalized state,
+`LOCKED`. It is possible that the user decides they need to make changes, such as
+uploading or removing a file, and in that case they can revert the Context to `OPEN`.
+If no changes are needed, however, the user can fully finalize the Context by setting
+it to `CLOSED`, after which point no changes can be made without opening a new
+`UploadContext`.
 If user tries to change the status of an `UploadContext` that's already set to `CLOSED`,
 they receive an error. Once the update operation is complete, the UCS publishes a Kafka
 event reflecting the latest state of the `UploadContext` and returns an HTTP response
