@@ -33,12 +33,14 @@ There are three categories of output in the UCS: HTTP responses, published event
 data stored in the database. HTTP responses are described below in the API Definitions
 section. The published events and database storage are driven simultaneously by
 Hexkit's MongoKafkaDaoPublisher, which the UCS uses to store `UploadContext` and
-`FileUpload` instances. Changes to objects of both categories results in a new Kafka
-event.
+`FileUpload` instances. Anytime an `UploadContext` or `FileUpload` is created, modified,
+or deleted, the UCS publishes a Kafka event containing the latest state. This is done
+according to the Outbox Pattern (not described in further detail here).
 
 #### Auth
 Users will not access the UCS's HTTP API directly, but rather through the
-`ghga-connector`. Successful access to HTTP endpoints will require the encrypted
+`ghga-connector` or Data Portal.
+Successful access to HTTP endpoints will require the encrypted
 access token they obtained from the Data Portal when creating the Upload Context.
 The HTTP request responsible for creating the Upload Context does not come directly
 from the user, but rather from the Study Repository Service.
@@ -89,12 +91,17 @@ is responsible for further validation, like ensuring interrogation was successfu
 
 ### File Upload Init
 The user initiates the upload process for a given single file by making a request to
-the `POST /uploads` endpoint. If a valid encrypted access token is supplied with the
+the `POST /uploads` endpoint. The request body includes the unencrypted checksum, the
+access token, and the alias (or whichever naming element is used to match the file
+with the metadata content).
+
+If a valid encrypted access token is supplied with the
 request, the UCS ensures it doesn't already have a completed `FileUpload` for the same
-file, then adds the `FileUpload` to the associated `UploadContext`. The UCS publishes
-upsertion events to Kafka for both the `FileUpload` and `UploadContext`
-objects, and finally returns an HTTP response to the user indicating that the file
-upload was successfully initiated.
+file, then adds the `FileUpload` to the associated `UploadContext`.
+
+The UCS publishes upsertion events to Kafka for both the `FileUpload` and
+`UploadContext` objects, and finally returns an HTTP response to the user indicating
+that the file upload was successfully initiated.
 
 The `ghga-connector` uploads a given file in chunks, and for each chunk it requests
 a pre-signed upload URL. If the request includes a valid access token, the UCS
