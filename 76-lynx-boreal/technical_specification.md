@@ -89,16 +89,14 @@ The `ghga-connector` uploads a given file in chunks, and for each chunk it reque
 a pre-signed upload URL. If the request includes a valid access token, the UCS
 returns an HTTP response with the pre-signed upload URL if the token is valid.
 
-### File Upload Termination
-The user makes a request to `PATCH /uploads`, indicating
-they wish to terminate an ongoing multipart upload for one of their files. If a
-valid encrypted access token is supplied with the request, the UCS attempts to
-cancel the multipart upload via the S3 client, if said upload exists. Afterward, 
-it ensures that the corresponding `FileUpload` object's `state` is still set to `INIT`.
-The `FileUpload` object persists, however, and the user may subsequently try uploading
-the file again. Upload termination does not trigger any change to the parent
-`UploadContext`. The UCS returns an HTTP response confirming that the termination
-request was successful.
+### File Upload Termination (Upload Completion)
+The user initiates a file upload using the `ghga-connector`. When the upload is
+complete, the connector automatically makes a request to `PATCH /uploads`. This call
+instructs the UCS to communicate with the S3 instance and terminate (complete) the
+multipart upload. The UCS will update the `FileUpload` instance to `COMPLETED` and
+publish a Kafka event reflecting the new state. Finally, the UCS will return an HTTP
+response indicating the operation was successful and that the file is completely
+uploaded.
 
 ### File Upload Deletion
 The user makes a request to the `DELETE /uploads` endpoint, indicating they wish to
