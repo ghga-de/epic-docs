@@ -76,6 +76,10 @@ indicating the update was successful.
 
 ![UploadContext State Diagram](./images/upload_context.png)
 
+An `UploadContext` may only be moved from `LOCKED` to `CLOSED` if all its linked
+`FileUpload`s are set to `COMPLETED`. External logic in the Study Repository Service
+is responsible for further validation, like ensuring interrogation was successful.
+
 ### File Upload Init
 The user initiates the upload process for a given single file by making a request to
 the `POST /uploads` endpoint. If a valid encrypted access token is supplied with the
