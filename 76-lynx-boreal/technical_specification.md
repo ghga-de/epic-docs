@@ -74,6 +74,8 @@ they receive an error. Once the update operation is complete, the UCS publishes 
 event reflecting the latest state of the `UploadContext` and returns an HTTP response
 indicating the update was successful.
 
+![UploadContext State Diagram](./images/upload_context.png)
+
 ### File Upload Init
 The user initiates the upload process for a given single file by making a request to
 the `POST /uploads` endpoint. If a valid encrypted access token is supplied with the
