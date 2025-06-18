@@ -44,7 +44,7 @@ Successful access to HTTP endpoints will require the encrypted
 access token they obtained from the Data Portal when creating the Upload Context.
 The HTTP request responsible for creating the Upload Context does not come directly
 from the user, but rather from the Study Repository Service.
-For more information on the HTTP API, see endpoint definitions below.
+For more information on the HTTP API, see the endpoint definitions below.
 
 ### Included/Required:
 - Remove existing core logic
@@ -57,7 +57,7 @@ Archive test bed integration, Study Repository Service development, or front end
 ## User Journeys
 
 ### UploadContext Creation
-Using the Data Portal, the user initiates file upload for a study. The request flows
+Using the Data Portal, the user initiates a file upload for a study. The request flows
 from the Data Portal to the Study Repository Service (where it passes through
 validation and other checks) and ultimately to the UCS's HTTP endpoint
 `POST /contexts`. The UCS creates a new
@@ -119,7 +119,7 @@ uploaded.
 ### File Upload Deletion
 The user makes a request to the `DELETE /uploads` endpoint, indicating they wish to
 delete a file from the associated Upload Context. If a valid encrypted access token
-is supplied with the request, the UCS terminates the ongoing upload if it exists and
+is supplied with the request, the UCS cancels the ongoing upload if it exists and
 deletes the `FileUpload` object from the database. It removes the reference
 from the `file_uploads` field in the `UploadContext` and publishes Kafka events
 reflecting the deletion of the upload and the new state of the Upload Context.
@@ -131,9 +131,9 @@ successful.
 ### RESTful/Synchronous:
 
 - POST /contexts: Create a new UploadContext
-- PATCH /contexts: Update an UploadContext to change the status.
-- POST /uploads: Initiate a file upload
-- PATCH /uploads: Terminate an ongoing file upload
+- PATCH /contexts: Update an UploadContext to change the status
+- POST /uploads: Initiate a multipart file upload
+- PATCH /uploads: Signal that a multipart file upload has been completed
 - DELETE /uploads: Remove a file upload from the UploadContext
 
 ### Payload Schemas for Events:
