@@ -13,7 +13,9 @@ The goal of this epic is to enable Data Portal users to download the full non-pe
 
 ### Included/Required
 
-- Alter the metldata load API such that not only the `EmbeddedDataset` entities from the `embedded_public` artifact are published via Kafka but also the `Study` entities 
+- Add metldata configuration to enable publishing entire artifacts, as specified in a list.
+- Update the builtin_workflows to save the output of add_accessions as an artifact, `added_accessions`.
+- Modify the load subpackage of metldata to publish the configured artifacts in their entirety (i.e. not breaking them down into resources). The artifacts should be stored, deleted, and shared in the outbox fashion, just as EmbeddedDatasets already are.
 - Implement a new service that consumes the `Study` events and produces and persists XLSX representations thereof. The service shall enable downloading these XLSX files through an HTTP API on the basis of the study IDs.
 - Modify the Data Portal to include a metadata download button on the "Study" tab of the detailed dataset view that links to the aforementioned HTTP API endpoint.
 
