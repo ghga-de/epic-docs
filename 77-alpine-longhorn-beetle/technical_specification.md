@@ -13,7 +13,6 @@ The goal of this epic is to enable Data Portal users to download the full non-pe
 
 ### Included/Required
 
-- Rewrite the [production metadata config](https://github.com/ghga-de/metadata-config/blob/main/configuration/metadata_config.yaml) to infer all references to all entities under the "Study" class. That is, the `embedded_public` artifact produced by the [GHGA workflow](https://github.com/ghga-de/metldata/blob/main/src/metldata/builtin_workflows/ghga_archive.py) shall include all metadata entities that are included under the root entity `Submission`.
 - Alter the metldata load API such that not only the `EmbeddedDataset` entities from the `embedded_public` artifact are published via Kafka but also the `Study` entities 
 - Implement a new service that consumes the `Study` events and produces and persists XLSX representations thereof. The service shall enable downloading these XLSX files through an HTTP API on the basis of the study IDs.
 - Modify the Data Portal to include a metadata download button on the "Study" tab of the detailed dataset view that links to the aforementioned HTTP API endpoint.
