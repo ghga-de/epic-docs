@@ -12,7 +12,7 @@ canonizing a UUID4 header for all events (`event_id`). The `NOS`, `NS`, and `DLQ
 receive updates targeting this change after updating `hexkit`.
 
 Changes for `hexkit` should be included in the same release as the changes from the
-`Slow Worm` epic.
+[Slow Worm](../74-slow-worm/technical_specification.md) epic.
 
 ### Motivation:
 Currently, idempotence is only achievable
@@ -46,8 +46,9 @@ If all Kafka events have a standard UUID4 header, stored and revived like the
 correlation ID, then deduplication becomes significantly easier. Services can store
 the IDs and perform an idempotence check atomically via `.insert()`.
 
-In the case that an inbound event's ID collides with that of another event in a
-deduplication store, the event will go to the DLQ and we can just give it another ID.
+In the highly improbable case that an inbound event's ID collides with that of another
+event in a deduplication store, the event will go to the DLQ and we can just give it
+another ID.
 
 ### Included/Required:
 Hexkit:
