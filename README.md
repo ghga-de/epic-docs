@@ -1,12 +1,21 @@
-# Epic Docs
+# Epic Documentation
 
-Documentation and plans for service development epics.
+This repository contains technical specifications for GHGA development epics,
+documenting the scope and plans for each epic before the epic is started.
+
+## Structure and Conventions
+
+Each epic should have a descriptive title, a number and code name which should be the name of an animal (e.g. Blob Fish or Alpine Longhorn Beetle).
+
+The documentation for each epic should go into its own numbered directory (e.g., `0-blob-fish/` or `77-alpine-longhorn-beetle/`).
+
+Each directory should contain a Markdown file `technical_specification.md`  as the main specification document, and additional supporting files or subdirectories as needed.
 
 There are two different types of epics: Exploratory Epics and Implementation Epics.
 
 Please have a look at the templates ([exploratory](./template_exploratory_epic), [implementation](./template_implementation_epic)) and especially the contained technical specifications ([exploratory](./template_exploratory_epic/technical_specification.md), [implementation](./template_implementation_epic/technical_specification.md)).
 
-This repository is part of the [Epic Planning and Marathon SOP](https://docs.ghga-dev.de/main/sops/sop001_epic_planning.html).
+This repository is part of the [Epic Planning and Marathon SOP](https://ghga.pages.hzdr.de/internal.ghga.de/main/sops/development/epic_planning/).
 
 ## The Saga so far
 
