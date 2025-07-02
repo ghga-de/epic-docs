@@ -6,9 +6,9 @@ This repository contains technical specifications for GHGA (German Human Genome-
 
 ## Repository Structure and Naming Conventions
 
-Each epic is documented in a directory with a filename consisting of the number and code name of the epic, separated by hyphens.
+Each epic is documented in a directory with a filename consisting of the number and code name of the epic, separated by hyphens (e.g., `0-blob-fish/` or `77-alpine-longhorn-beetle/`).
 
-See the `README` file for details.
+See the `README` file in the root directory for all details.
 
 ## Document Structure
 
@@ -20,10 +20,15 @@ There are two template directories:
 
 The format and content of the technical specification are different depending on the epic type (exploratory or implementation). The structure of the documentation should follow these templates.
 
-The main specification document is always called `technical_specification.md`:
-It starts with a summary of the goal that should be achieved with this epic. It lists all the anticipated features as well as which features should not be addressed as part of the epic. Furthermore, any results of the epics (such as documents, or code repositories) are linked here.
+When creating new epics, always follow the structure of the respective template files in the repository and make sure to use a unique code name:
 
-On top of that, implementation details on how to reach the anticipated outcome/output of this epic are provided.
+- Use `template_exploratory_epic/technical_specification.md` for exploratory epics
+- Use `template_implementation_epic/technical_specification.md` for implementation epics
+
+The main specification document should be always called `technical_specification.md`
+like in the template. It starts with a summary of the goal that should be achieved with this epic. It lists all the anticipated features as well as which features should not be addressed as part of the epic. Furthermore, any results of the epics (such as documents, or code repositories) are linked here. On top of that, implementation details on how to reach the anticipated outcome/output of this epic are provided.
+
+These template files contain the exact structure and placeholders that must be followed.
 
 ## Related Repositories
 
