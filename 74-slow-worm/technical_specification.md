@@ -7,24 +7,27 @@ Epic planning and implementation follow the
 
 ## Scope
 ### Outline:
-The aim of this epic is to stop serializing UUIDs and Datetimes as strings in `hexkit`,
-as decided in the ADR "[UUID and Datetime Representation in MongoDB](https://github.com/ghga-de/adrs/blob/main/docs/adrs/adr011_uuids_datetimes_mongodb.md)".
+The aim of this epic is to stop serializing UUIDs and datetime objects as strings in
+`hexkit` and instead allow `pymongo` to serialize them to BSON directly, as decided in
+the ADR "[UUID and Datetime Representation in MongoDB](https://github.com/ghga-de/adrs/blob/main/docs/adrs/adr011_uuids_datetimes_mongodb.md)".
 
-The `hexkit` changes for this epic should be released with the Eurasian Blackbird
-`hexkit` changes. 
+The `hexkit` changes for this epic should be released with the
+[Eurasian Blackbird](../75-eurasian-blackbird/technical_specification.md) `hexkit`
+changes. 
 
 ### Included/Required:
-- Update `hexkit` to remove string serialization for UUIDs and Datetimes, as well as
-  add support for binary UUIDs and tz-aware binary datetimes
+- Update `hexkit` to remove string serialization for UUIDs and datetimes, as well as
+  add support for BSON UUID and Date types in MongoDB providers.
 - Rollout:
-  - Update `ghga-service-commons`, followed by `ghga-event-schemas`, then other services
+  - Update `ghga-service-commons`, then `ghga-event-schemas`, then other services:
     - Update to new `hexkit` version
     - Update references to `correlation_id` that are str-typed
     - Replace string UUIDs and Datetimes in tests and service code
     - Write migrations for all services that store UUIDs and Datetimes as strings
   
 ### Deployment Note:
-The `NS`'s `notifications` collection should be dropped once deployment is complete.
+The `NS`'s `notifications` collection should be dropped once deployment is
+complete (see below).
 
 ## API Definitions:
 
@@ -51,13 +54,14 @@ Models Containing String Datetimes or UUIDs in `ghga-event-schemas`:
 ### Hexkit
 
 Changes needed:
-- Remove UUID and Datetime-specific string serialization in the MongoDB provider
+- Remove UUID and datetime-specific string serialization in the MongoDB provider
 - Set MongoDB to use the correct UUID representation (Binary Subtype 4) in the provider.
 - MongoDB stores dates as UTC. We already require dates to be in UTC, but we
   must continue to ensure values are in UTC before storing them in the database.
   We will have to set the `tz_aware` parameter to `True` when creating MongoClient
-  instances to ensure that `pymongo` returns unambiguous, tz-aware datetimes. This
-  could be an optional config parameter defaulting to `True` or an opinionated,
+  instances to ensure that `pymongo` returns tz-aware datetimes that will always have a
+  UTC timezone.
+  This could be an optional config parameter defaulting to `True` or an opinionated,
   hardcoded choice for `hexkit`.
 - Changes must be reflected in both `MongoKafkaDaoPublisherFactory.construct()` and
     `MongoDbDaoFactory.__init__()`.
@@ -86,7 +90,7 @@ List of services that require migrations:
 - WPS
 - DLQS
 - ARS
-- Auth-Service (UMS and Claims Repository)
+- Auth-Service (User Registry and Claims Repository)
 - NOS
 
 Other services don't need migrations, but do require being updated to the newest
