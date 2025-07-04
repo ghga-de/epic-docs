@@ -51,8 +51,8 @@ The backend API does not yet provide the necessary information for the frontend 
 
 ### Claims Repository:
 
-- `GET /download-access` - retrieve download access grants with optional query parameters for user ID, dataset ID, and validity period
-- `DELETE /download-access/{id}` - revoke a download access grant
+- `GET /download-access/grants` - retrieve download access grants with optional query parameters for user ID, dataset ID, and validity period
+- `DELETE /download-access/grants/{id}` - revoke a download access grant
 
 ### Endpoint Specifications:
 
@@ -61,7 +61,11 @@ The `GET` endpoints should return a list of all matching download access grants 
 - Validity periods and assertion dates
 - Unique ID (matching the corresponding claim ID in the Claims Repository)
 
+Claims with a revocation date set should not appear in the list of access grants.
+
 The `DELETE` endpoints should *not* actually delete the corresponding claim, but instead set its revocation date.
+
+The endpoints of the Access Request Service must require authorization as data steward. The endpoints of the Claims Repository are only internal and therefore do not need authorization. We should make the Claims Repository API more restrictive in the future (zero trust principle), but not as part of this epic.
 
 ### User Registry:
 
