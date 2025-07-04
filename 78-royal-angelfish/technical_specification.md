@@ -81,7 +81,9 @@ The backend API must also send corresponding notifications to the users:
 
 After we have refined the role concept to allow other elevated roles such as admin or superuser, and after implementation of an improved audit logging in our new  architecture, and after careful assessment of the security related and legal implications, we can consider a follow-up epic which would add the following functionality:
 
-- As part of the user management, we could also show roles and allow superusers to grant or revoke them.
+- As part of the user management, we could also
+  - show roles and allow superusers to grant or revoke them
+  - show an audit trail of past user activity.
 - As part of the access management, we could provide superusers with a way to
   - modify the validity period of active or inactive access grants
   - create grants without access requests
