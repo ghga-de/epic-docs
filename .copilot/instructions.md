@@ -39,6 +39,7 @@ Sometimes epics relate to Architecture Decision Records that can be found under 
 ## Writing Guidelines
 
 - The target audience are GHGA developers
+- Use GitHub Markdown Flavor (GFM)
 - Use clear, technical language
 - Be precise and specific, but not overly verbose
 - Include functional and non-functional requirements
