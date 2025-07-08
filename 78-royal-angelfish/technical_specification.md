@@ -50,6 +50,7 @@ Rough mockups of the UI to be implemented:
 The existing UI of the access request and IVA manager should be adapted to match the new UI as part of this epic:
 - Reduce the number of filter fields by combining some of the fields
 - Add detail buttons in addition to making table row clickable
+- Add a hover and focus effect for the table rows
 - Convert detail dialogs to navigable standalone pages, with transitions
 
 ## API Definitions
