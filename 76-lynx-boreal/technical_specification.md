@@ -8,12 +8,44 @@ Epic planning and implementation follow the
 ### Outline:
 The goal of this epic is to overhaul the Upload Controller Service (UCS) as part of the
 new [File Upload concept](https://ghga.pages.hzdr.de/internal.ghga.de/feature_archconcept-file-upload/developer/architecture_concepts/ac007_file_upload/).
-While AC 7 includes references to future services like the Study Repository Service, some of the machinery there is still in the planning phase. This epic will therefore rely upon some shortcuts, such as extra Data Steward involvement. When the full architectural concept is realized, the appropriate adaptations will follow in a future epic.
+While AC 7 includes references to future services like the Study Repository Service,
+some of the machinery there is still in the planning phase. This epic will therefore
+rely upon some shortcuts, such as extra Data Steward involvement. When the full
+architectural concept is realized, the appropriate adaptations will follow in a future
+epic.
 
+### Included/Required:
+- Create UOS
+- Replace existing UCS logic within the file services monorepo
+- Adapt WPS for "upload" work packages
+- Adapt CRS to manage claims for upload contexts
+- Write Unit and Integration Tests
+
+### Not included:
+Archive test bed integration, Study Repository Service development, or front end work.
+
+
+# TODO: Do we need to keep the list of file uploads in the upload context anymore?
+# TODO: need some way to keep file upload list and multipart uploads sane if there are errors when an upload has been started but not put in the DB or vice versa
+# TODO: Check how we update u.c. status -- is it all through UOS or some through UC directly?
+
+#### New Service: Upload Orchestration Service (UOS)
+
+This epic introduces a new lightweight service to handle authentication concerns while
+preserving the boundary between file services and auth concerns like user IDs and roles.
+
+All UCS actions will require a Work Order Token (WOT), which can only be created from
+existing Work Packages in the Work Package Service (WPS) based on claims in the Claims
+Repository Service (CRS). We don't want Data Stewards interacting directly with the
+CRS to create the claim, but the UCS likewise shouldn't be responsible for creating
+the claim. Recognizing that enabling file uploads and creating the upload claim are
+bundled actions, we will instead delegate these things to a new service, the UOS.
+Data Stewards will query the UOS HTTP API to enable uploads for a new study (i.e. create
+a new `UploadContext`) and create the required upload claims for the user.
+
+### Upload Controller Service
 ![UCS Diagram](./images/ucs.png)
 > Future Final UCS Diagram with Study Repository Service
-
-
 #### Domain Objects
 The UCS owns two domain objects, which it broadcasts as outbox events via Kafka. The
 first domain object is the `UploadContext`, which broadly serves to delineate
@@ -31,7 +63,7 @@ any Kafka events. However, we will define a slim CLI interface for the service t
 exposes commands to `run-rest` and `publish-events`. These commands are commonly seen
 across our services at this time.
 
-### Outputs
+#### Outputs
 There are three categories of output in the UCS: HTTP responses, published events, and
 data stored in the database. HTTP responses are described below in the API Definitions
 section. The published events and database storage are driven simultaneously by
@@ -69,18 +101,34 @@ In summary:
 
 For more information on the HTTP API, see the endpoint definitions below.
 
-### Included/Required:
-- Remove existing core logic
-- Create new core class w/ outbox publisher
-- Write Unit and Integration Tests
+### Work Package Service
+The WPS is hardcoded to set up an error when creating a work package if the work type
+is anything other than "download". The logic is all download-centric, so the WPS needs
+to be updated to accommodate "upload" work packages. To this end, these are the main
+points to address:
+1. Update `WorkPackageRepository` logic to handle CRUD-ing "upload" work packages
+2. Modify the Work Order Token model so `file_id` is optional, then add an optional `upload_context_id` field
+3. Listen for outbox events carrying `UploadContext` data, and store/delete the context IDs
+   1. For deletions, related work packages should be removed
+4. Add `upload_access_url` to `AccessCheckConfig`
+5. Augment the `AccessCheckAdapter` so it can call `/upload-access/users/{user_id}/uploads/{upload_context_id}` to check if a user has access to a given `UploadContext`
+6. Provide a way to distribute WOT, either by modifying the `/work-packages/{work_package_id}/files/{file_id}/work-order-tokens` endpoint or creating a new endpoint
 
-### Not included:
-Archive test bed integration, Study Repository Service development, or front end work.
+
+### Claims Repository
+Currently, the CRS only manages claims for `datasets`. Claims' visa values for download
+access to datasets are a combination of a hardcoded prefix (specific to datasets in
+general) and a dataset ID. There are specific functions to determine if given claim
+is for a dataset and if so, which dataset that is - such as `get_dataset_for_value()`.
+`create_controlled_access_claim()` should be modified to work for both up- and download
+access.
+
+The CRS needs new HTTP endpoints for managing `UploadContext`-specific claims in the Access.
+Please see the API Definitions for details.
 
 ## User Journeys
 
 ### UploadContext Creation
-# TODO: review this section after reaching consensus on UOS/context-claim creation
 A Data Steward makes a call to the UOS to create a new `UploadContext`, specifying the ID(s) of the user(s) who will upload files.
 The UOS calls the UCS's `POST /contexts` endpoint to create the actual `UploadContext` with the state set
 to `OPEN`. The UCS issues an outbox event, which is consumed by the Work Package
@@ -140,11 +188,7 @@ that the file upload was successfully initiated.
    - Assuming the WOT is valid, the UCS returns a presigned, short-lived upload URL.
    - The Connector uploads the file parts until complete.
 
-
-
-
 ### File Upload Termination (Upload Completion)
-# TODO: iron out API vocabulary
 When the upload is complete, the connector automatically makes a request to the UCS
 endpoint `PATCH /contexts/{context_id}/uploads/{file_id}`.
 This call instructs the UCS to communicate with the S3 instance and terminate (complete) the multipart upload.
@@ -167,6 +211,7 @@ indicating the deletion was successful.
 
 ### RESTful/Synchronous:
 
+#### Upload Controller Service:
 - `GET /contexts`: Retrieve all `UploadContexts`
   - Requires WOT
   - Data Stewards can see all `UploadContexts`, while users can only see ones they have an active claim for.
@@ -189,6 +234,25 @@ indicating the deletion was successful.
   - Deletes the `FileUpload` and tells S3 to cancel the multipart upload if applicable.
 - `GET /contexts/{context_id}/uploads/{file_id}/parts/{part_no}`: Get pre-signed S3 upload URL for file part
   - Requires WOT
+
+#### Upload Orchestration Service:
+- `POST /contexts`: Create a new `UploadContext` and grant a claim for it for a user
+  - Requires Data Steward Role
+  - Request body must contain at least one user ID (whether this is one ID or a list of IDs can be decided during implementation)
+  - Uses a token to instruct the UCS to create a new `UploadContext` via HTTP call
+  - Instructs the CRS to create a new claim for each specified user
+
+#### Work Package Service:
+- `GET /users/{user_id}/uploads`: List all `UploadContext` IDs available to the user
+- `POST /work-packages/{work_package_id}/uploads/{upload_context_id}/work-order-tokens`: Create a WOT for uploading files
+  - Requires a Work Package Access Token, so the user must have already created a Work Package
+
+#### Claims Repository Service:
+- CRS Authentication for upload endpoints should match existing download counterparts
+- `GET /upload-access/users/{user_id}/uploads/{upload_context_id}`: check if a user has access to a certain upload bucket
+- `POST /upload-access/users/{user_id}/uploads/{upload_context_id}`: grant upload access
+  - This can be called by the WPS at an appropriate time (not nailed down right now).
+- `DELETE /upload-access/users/{user_id}/uploads/{upload_context_id}`: revoke upload access
 
 ### Payload Schemas for Events:
 
@@ -225,8 +289,18 @@ class FileUpload(BaseModel):
 
 ## Additional Implementation Details:
 
+#### WOT Modifications in WPS
+The Work Order Tokens in the WPS are defined with `file_id` as a required field. The
+`file_id` field should be made optional, and a new optional field called `upload_context_id`
+should be added.
+
+#### Download Controller WOT Dependency
+The Download Controller Service (DCS) uses WOTs to authenticate download URL requests.
+It maintains a model in a core module that defines the WOT structure. Depending on the
+exact changes to the WOT model in the WPS, the DCS may or may not have to be updated too.
 
 ### Testing
+# TODO: add more stuff here
 Tests need to cover at least the following items (not exhaustive):
 - Standard endpoint authentication battery
 - Happy path for each endpoint
@@ -237,6 +311,6 @@ Tests need to cover at least the following items (not exhaustive):
 
 ## Human Resource/Time Estimation:
 
-Number of sprints required: 2
+Number of sprints required: 3
 
-Number of developers required: 1
+Number of developers required: 2
