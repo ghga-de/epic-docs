@@ -16,18 +16,14 @@ epic.
 
 ### Included/Required:
 - Create UOS
-- Replace existing UCS logic within the file services monorepo
-- Adapt WPS for "upload" work packages
-- Adapt CRS to manage claims for upload contexts
+- Revamp existing UCS logic
+- Adapt WPS for "upload" work packages and tokens
+- Adapt CRS to also manage claims for upload contexts
 - Write Unit and Integration Tests
 
 ### Not included:
 Archive test bed integration, Study Repository Service development, or front end work.
 
-
-# TODO: Do we need to keep the list of file uploads in the upload context anymore?
-# TODO: need some way to keep file upload list and multipart uploads sane if there are errors when an upload has been started but not put in the DB or vice versa
-# TODO: Check how we update u.c. status -- is it all through UOS or some through UC directly?
 
 #### New Service: Upload Orchestration Service (UOS)
 
@@ -44,8 +40,7 @@ Data Stewards will query the UOS HTTP API to enable uploads for a new study (i.e
 a new `UploadContext`) and create the required upload claims for the user.
 
 ### Upload Controller Service
-![UCS Diagram](./images/ucs.png)
-> Future Final UCS Diagram with Study Repository Service
+
 #### Domain Objects
 The UCS owns two domain objects, which it broadcasts as outbox events via Kafka. The
 first domain object is the `UploadContext`, which broadly serves to delineate
@@ -162,7 +157,7 @@ indicating the update was successful.
 In a future iteration of the upload path, users will directly update context state
 themselves via the Data Portal or `ghga-connector`.
 
-![UploadContext State Diagram](./images/upload_context.png)
+![UploadContext State Diagram](./images/uc_state.png)
 
 An `UploadContext` may only be moved from `LOCKED` to `CLOSED` if all its linked
 `FileUpload`s are set to `COMPLETED`.
@@ -220,10 +215,10 @@ indicating the deletion was successful.
 - `GET /contexts/{context_id}`: Retrieve an `UploadContext` by ID
   - Requires WOT
   - Data Stewards can see all `UploadContexts`, while users can only see ones they have an active claim for.
-- `PATCH /contexts/{context_id}`: Update an `UploadContext` to change the status
+- `PATCH /contexts/{context_id}`: Update the state of an `UploadContext`
   - Currently only available to Data Stewards, as only they can obtain the required token.
   - Request body must contain the new state of the context
-- `POST /contexts/{context_id}/files/`: Add a new `FileUpload` to an existing `UploadContext`
+- `POST /contexts/{context_id}/uploads/`: Add a new `FileUpload` to an existing `UploadContext`
   - Requires WOT
   - Request body must contain the required file upload details
 - `PATCH /contexts/{context_id}/uploads/{file_id}`: Conclude file upload in UCS
@@ -241,6 +236,12 @@ indicating the deletion was successful.
   - Request body must contain at least one user ID (whether this is one ID or a list of IDs can be decided during implementation)
   - Uses a token to instruct the UCS to create a new `UploadContext` via HTTP call
   - Instructs the CRS to create a new claim for each specified user
+- `PATCH /contexts/{upload_context_id}`: Update the state of an `UploadContext`
+  - Requires Data Steward Role *or* valid claim to the context
+    - Only Data Stewards can do `LOCKED` -> `CLOSED` or `LOCKED` -> `OPEN`
+    - Users are allowed to do `OPEN` -> `LOCKED`
+  - Request body must contain the new state of the context
+  - In turn, calls the matching UCS endpoint
 
 #### Work Package Service:
 - `GET /users/{user_id}/uploads`: List all `UploadContext` IDs available to the user
@@ -282,7 +283,7 @@ class FileUpload(BaseModel):
 
     upload_id: UUID4
     state: FileUploadState  # one of INIT, COMPLETED
-    original_path: str
+    original_path: str  # subject to change, used to match file upload to metadata
     checksum: str
 ```
 
@@ -300,13 +301,33 @@ It maintains a model in a core module that defines the WOT structure. Depending 
 exact changes to the WOT model in the WPS, the DCS may or may not have to be updated too.
 
 ### Testing
-# TODO: add more stuff here
 Tests need to cover at least the following items (not exhaustive):
 - Standard endpoint authentication battery
 - Happy path for each endpoint
 - Core error translation for HTTP API for each endpoint
 - Disallow changing status of a CLOSED UploadContext
 - Disallow removing a file from a CLOSED UploadContext
+- Make sure only Data Stewards can create, close, or reopen contexts
+- Users can only see upload contexts that they have a valid claim for
+- Data Stewards can see all upload contexts
+- Claims are revoked when upload context is closed
+- Work packages are revoked/invalidated when upload context is closed
+- Users cannot create work packages for closed contexts
+- UCS rejects http requests for closed contexts even with a valid WOT
+- UCS rejects requests for locked contexts, except to move state to `OPEN` or `CLOSED`
+
+### Loose Ends/Ideas for Future Enhancements
+- Can we leverage `WorkType` to provide more fine-grained/nested action control via WOTs?
+- Maybe the UOS could preemptively generate `UploadContext`s if it can associate them with studies?
+  - Is there a way the ARS could facilitate the first part of the upload process?
+- What tool does the Data Steward use to access the UOS?
+- In what cases would we *delete* an `UploadContext` aside from fixing some mistake?
+- Is it sufficient for the WPS/CRS to invalidate WorkPackages/Claims when they see via
+Kafka that an `UploadContext` is `CLOSED`? Or does the UOS need to make explicit calls?
+
+
+## Diagrams
+![File Upload Sequence](./images/upload_sequence.png)
 
 
 ## Human Resource/Time Estimation:
