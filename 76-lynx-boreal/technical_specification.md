@@ -22,7 +22,9 @@ epic.
 - Write Unit and Integration Tests
 
 ### Not included:
-Archive test bed integration, Study Repository Service development, or front end work.
+- Archive test bed integration
+- Subsequent FIS or IFRS updates for the upload path
+- Any front-end work that may be needed
 
 
 #### New Service: Upload Orchestration Service (UOS)
@@ -38,6 +40,9 @@ the claim. Recognizing that enabling file uploads and creating the upload claim 
 bundled actions, we will instead delegate these things to a new service, the UOS.
 Data Stewards will query the UOS HTTP API to enable uploads for a new study (i.e. create
 a new `UploadContext`) and create the required upload claims for the user.
+
+![UOS and UCS Service Diagram](./images/uos_and_ucs.png)
+> General service diagram showing the new UOS and UCS
 
 ### Upload Controller Service
 
