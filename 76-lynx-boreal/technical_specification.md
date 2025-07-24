@@ -76,20 +76,29 @@ according to the Outbox Pattern (not described in further detail here).
 Before general users (not Data Stewards) can upload files, three things must happen:
 1. A Data Steward must create the `UploadContext` via the Upload Orchestration Service.
 2. A Data Steward must grant the user a claim enabling them to use the `UploadContext`.
-3. The user must create a Work Package via the Data Portal to obtain a Work Package Access Token (WPAT). Only one WPAT is needed for the entire series of files under normal circumstances.
+3. The user must create a Work Package via the Data Portal to obtain a Work Package
+Access Token (WPAT). Only one WPAT is needed for the entire series of files under normal
+circumstances.
 
 The user then supplies the WPAT to the `ghga-connector` to upload files.
-The `ghga-connector` obtains Work Order Tokens (WOTs) automatically by providing the WPAT to the WPS, and then makes at least two calls for each file:
+The `ghga-connector` obtains Work Order Tokens (WOTs) automatically by providing the
+WPAT to the WPS, and then makes at least two calls for each file:
 1. A POST request to the UCS to create the `FileUpload`.
-2. A GET request to the UCS to obtain a file part upload URL. This call is repeated for each file part.
+2. A GET request to the UCS to obtain a file part upload URL. This call is repeated for
+each file part.
 
 Both the POST and GET requests will require a valid WOT to succeed.
 
-There is an important difference here from the download path's usage of WOTs: during download, WOTs must carry the file ID being requested for download. For upload, file IDs are not used, and WOTs merely carry the Upload Context's uuid.
-This is because we want the upload process to not be too restrictive nor prescriptive. This way, the user can upload the files they want without announcing them beforehand.
+There is an important difference here from the download path's usage of WOTs: during
+download, WOTs must carry the file ID being requested for download. For upload, file IDs
+are not used, and WOTs merely carry the Upload Context's uuid.
+This is because we want the upload process to not be too restrictive nor prescriptive.
+This way, the user can upload the files they want without announcing them beforehand.
 
-When the user has completed uploading all files, the user (or a Data Steward) moves the `UploadContext` to the `LOCKED` state and eventually to the `CLOSED` state by an HTTP call to the UOS. 
-Once `CLOSED`, the WPS and Claims Repository will process the 'deleted' Kafka event and disable/delete any existing claims or tokens.
+When the user has completed uploading all files, the user (or a Data Steward) moves the
+`UploadContext` to the `LOCKED` state and eventually to the `CLOSED` state by an HTTP
+call to the UOS. Once `CLOSED`, the WPS and Claims Repository will process the 'deleted'
+Kafka event and disable/delete any existing claims or tokens.
 
 In summary:
 - UOS:
@@ -111,19 +120,22 @@ points to address:
 3. Listen for outbox events carrying `UploadContext` data, and store/delete the context IDs
    1. For deletions, related work packages should be removed
 4. Add `upload_access_url` to `AccessCheckConfig`
-5. Augment the `AccessCheckAdapter` so it can call `/upload-access/users/{user_id}/uploads/{upload_context_id}` to check if a user has access to a given `UploadContext`
-6. Provide a way to distribute WOT, either by modifying the `/work-packages/{work_package_id}/files/{file_id}/work-order-tokens` endpoint or creating a new endpoint
+5. Augment the `AccessCheckAdapter` so it can call `/upload-access/users/{user_id}/uploads/{upload_context_id}`
+to check if a user has access to a given `UploadContext`
+6. Provide a way to distribute WOTs, either by modifying the
+`/work-packages/{work_package_id}/files/{file_id}/work-order-tokens` endpoint or
+creating a new endpoint
 
 
 ### Claims Repository
 Currently, the CRS only manages claims for `datasets`. Claims' visa values for download
 access to datasets are a combination of a hardcoded prefix (specific to datasets in
-general) and a dataset ID. There are specific functions to determine if given claim
+general) and a dataset ID. There are also specific functions to determine if given claim
 is for a dataset and if so, which dataset that is - such as `get_dataset_for_value()`.
 `create_controlled_access_claim()` should be modified to work for both up- and download
 access.
 
-The CRS needs new HTTP endpoints for managing `UploadContext`-specific claims in the Access.
+The CRS needs new HTTP endpoints for managing `UploadContext`-specific claims.
 Please see the API Definitions for details.
 
 ## User Journeys
@@ -132,7 +144,9 @@ Please see the API Definitions for details.
 A Data Steward makes a call to the UOS to create a new `UploadContext`, specifying the ID(s) of the user(s) who will upload files.
 The UOS calls the UCS's `POST /contexts` endpoint to create the actual `UploadContext` with the state set
 to `OPEN`. The UCS issues an outbox event, which is consumed by the Work Package
-Service. Afterward, the UOS makes subsequent calls to the CRS to award upload claims to
+Service. The CRS also gets this outbox event, but ignores it. The CRS only cares if an
+`UploadContext` is *deleted* or *closed*, and in both cases revokes any linked claims.
+Finally, the UOS makes subsequent calls to the CRS to award upload claims to
 the user(s) for the given `UploadContext` (specified by ID). Without this claim, the
 user cannot create a work package or upload files.
 
@@ -275,6 +289,7 @@ class UploadContext(BaseModel):
 
     upload_context_id: UUID4 # unique identifier for the instance
     state: UploadContextState  # one of OPEN, LOCKED, CLOSED
+    description: str  # used to help distinguish contexts since they aren't linked to studies
     file_uploads: list[FileUpload]  # use list function for default_factory
 
 class FileUploadState(StrEnum):
@@ -329,6 +344,8 @@ Tests need to cover at least the following items (not exhaustive):
 - In what cases would we *delete* an `UploadContext` aside from fixing some mistake?
 - Is it sufficient for the WPS/CRS to invalidate WorkPackages/Claims when they see via
 Kafka that an `UploadContext` is `CLOSED`? Or does the UOS need to make explicit calls?
+- Do we want to be able to handle the rare case where we need to grant upload access to another
+user after the upload context has already been created?
 
 
 ## Diagrams
