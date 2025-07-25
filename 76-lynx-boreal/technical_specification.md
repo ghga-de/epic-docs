@@ -108,7 +108,7 @@ state.
 In summary:
 - UOS:
   - The Data Steward role required to create `UploadContext`s and grant upload claims
-  - A valid WPAT or the Data Steward role is required to change the state of an `UploadContext`
+  - A valid WOT or the Data Steward role is required to change the state of an `UploadContext`
     - Data Steward role required for all state changes except `OPEN` -> `LOCKED`
 - UCS:
   - Upserting/Deleting `UploadContext` requires an internal service mesh token
