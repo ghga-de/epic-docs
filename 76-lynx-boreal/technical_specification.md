@@ -145,14 +145,24 @@ Please see the API Definitions for details.
 ## User Journeys
 
 ### UploadContext Creation
-A Data Steward makes a call to the UOS to create a new `UploadContext`, specifying the ID(s) of the user(s) who will upload files.
-The UOS calls the UCS's `POST /contexts` endpoint to create the actual `UploadContext` with the state set
-to `OPEN`. The UCS issues an outbox event, which is consumed by the Work Package
-Service. The CRS also gets this outbox event, but ignores it. The CRS only cares if an
-`UploadContext` is *deleted* or *closed*, and in both cases revokes any linked claims.
-Finally, the UOS makes subsequent calls to the CRS to award upload claims to
-the user(s) for the given `UploadContext` (specified by ID). Without this claim, the
+A Data Steward makes a call to the UOS to create a new `UploadContext`.
+The UOS calls the UCS's `POST /contexts` endpoint to create the actual `UploadContext`
+with the state set to `OPEN`. The UCS issues an outbox event, which is consumed by the
+Work Package Service. The CRS also gets this outbox event, but ignores it. The CRS only
+cares if an `UploadContext` is *deleted*, in which case it revokes any linked claims.
+
+> Actually deleting `UploadContext`s is probably a rare occasion, not the norm.
+
+The UOS receives the new `UploadContext` ID from the UCS and returns it to the Data
+Steward. The Data Steward then calls the UOS endpoint `POST /access`, supplying the
+user ID and context ID, plus any other required data, such as access expiry.
+
+Finally, the UOS makes a call to the CRS to award an upload claim to
+the user for the given `UploadContext` (specified by ID). Without this claim, the
 user cannot create a work package or upload files.
+If the UOS determines that the `UploadContext` does not exist, it returns an error.
+It might do this through querying the UCS or by maintaining a record of context IDs in
+its own database.
 
 ### UploadContext Update
 Users are only allowed to make the initial change from `OPEN` to `LOCKED`. Only Data
@@ -273,9 +283,9 @@ indicating the deletion was successful.
 
 #### Claims Repository Service:
 - CRS Authentication for upload endpoints should match existing download counterparts
-- `GET /upload-access/users/{user_id}/uploads/{upload_context_id}`: check if a user has access to a certain upload bucket
+- `GET /upload-access/users/{user_id}/uploads/{upload_context_id}`: check if a user has access to a certain upload context
 - `POST /upload-access/users/{user_id}/uploads/{upload_context_id}`: grant upload access
-  - This can be called by the WPS at an appropriate time (not nailed down right now).
+  - This is called by the UOS when the Data Steward grants a user upload access
 - `DELETE /upload-access/users/{user_id}/uploads/{upload_context_id}`: revoke upload access
 
 ### Payload Schemas for Events:
@@ -334,22 +344,21 @@ Tests need to cover at least the following items (not exhaustive):
 - Make sure only Data Stewards can create, close, or reopen contexts
 - Users can only see upload contexts that they have a valid claim for
 - Data Stewards can see all upload contexts
-- Claims are revoked when upload context is closed
+- Claims are *not* revoked when upload context is closed
 - Work packages are revoked/invalidated when upload context is closed
 - Users cannot create work packages for closed contexts
 - UCS rejects http requests for closed contexts even with a valid WOT
+  - Exception being to re-open the context
 - UCS rejects requests for locked contexts, except to move state to `OPEN` or `CLOSED`
 
 ### Loose Ends/Ideas for Future Enhancements
-- Can we leverage `WorkType` to provide more fine-grained/nested action control via WOTs?
-- Maybe the UOS could preemptively generate `UploadContext`s if it can associate them with studies?
+- Can we leverage `WorkType` to provide fine-grained/nested action control via WOTs?
+- Maybe the UOS could preemptively generate `UploadContext`s if it can associate them
+with studies?
   - Is there a way the ARS could facilitate the first part of the upload process?
 - What tool does the Data Steward use to access the UOS?
 - In what cases would we *delete* an `UploadContext` aside from fixing some mistake?
-- Is it sufficient for the WPS/CRS to invalidate WorkPackages/Claims when they see via
-Kafka that an `UploadContext` is `CLOSED`? Or does the UOS need to make explicit calls?
-- Do we want to be able to handle the rare case where we need to grant upload access to another
-user after the upload context has already been created?
+- When should the WPS invalidate WorkPackages for a context?
 
 
 ## Diagrams
