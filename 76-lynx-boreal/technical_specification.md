@@ -101,7 +101,9 @@ When the user has completed uploading all files, the user contacts the UOS to mo
 lock the context as well, if needed). When the user is
 satisfied that all uploads are correct and complete, they ask a Data Steward to move
 the `UploadContext` to the `CLOSED` state. The Data Steward contacts the UOS to do
-this. Once `CLOSED`, only Data Steward can re-open the context.
+this. Once `CLOSED`, only Data Steward can re-open the context. Claims for closed
+`UploadContexts` remain valid; the UCS is responsible for filtering activity based on
+state.
 
 In summary:
 - UOS:
@@ -268,13 +270,17 @@ indicating the deletion was successful.
   - Requires Data Steward Role
   - Request body must contain at least one user ID (whether this is one ID or a list of IDs can be decided during implementation)
   - Uses a token to instruct the UCS to create a new `UploadContext` via HTTP call
-  - Instructs the CRS to create a new claim for each specified user
 - `PATCH /contexts/{upload_context_id}`: Update the state of an `UploadContext`
   - Requires Data Steward Role *or* valid claim to the context
     - Only Data Stewards can do `LOCKED` -> `CLOSED` or `LOCKED` -> `OPEN`
     - Users are allowed to do `OPEN` -> `LOCKED`
   - Request body must contain the new state of the context
   - In turn, calls the matching UCS endpoint
+- `POST /access`: Grant user access to an `UploadContext`
+  - Requires Data Steward Role
+  - Instructs the CRS to create a new claim for each specified user
+  - Request body must contain upload context ID and user ID, plus any other req'd info.
+  - Browsing for and revoking claims can be done through the upcoming Claims Browser
 
 #### Work Package Service:
 - `GET /users/{user_id}/uploads`: List all `UploadContext` IDs available to the user
