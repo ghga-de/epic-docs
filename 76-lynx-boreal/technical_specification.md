@@ -190,7 +190,7 @@ they receive an error. Once an update operation is complete, the UCS publishes a
 event reflecting the latest state of the `UploadContext` and returns an HTTP response
 indicating the update was successful.
 
-![UploadContext State Diagram](./images/uc_state.png)
+![UploadContext State Diagram](./images/uc_state_machine.png)
 
 An `UploadContext` may only be moved from `LOCKED` to `CLOSED` if all its linked
 `FileUpload`s are set to `COMPLETED`.
