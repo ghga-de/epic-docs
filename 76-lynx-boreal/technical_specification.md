@@ -86,27 +86,31 @@ WPAT to the WPS, and then makes at least two calls for each file:
 1. A POST request to the UCS to create the `FileUpload`.
 2. A GET request to the UCS to obtain a file part upload URL. This call is repeated for
 each file part.
+3. A final PATCH request to the UCS to complete the file upload.
 
-Both the POST and GET requests will require a valid WOT to succeed.
+The three requests to the UCS will require a valid WOT to succeed.
 
 There is an important difference here from the download path's usage of WOTs: during
 download, WOTs must carry the file ID being requested for download. For upload, file IDs
 are not used, and WOTs merely carry the Upload Context's uuid.
-This is because we want the upload process to not be too restrictive nor prescriptive.
+This is because we want the upload process to not be too restrictive or prescriptive.
 This way, the user can upload the files they want without announcing them beforehand.
 
-When the user has completed uploading all files, the user (or a Data Steward) moves the
-`UploadContext` to the `LOCKED` state and eventually to the `CLOSED` state by an HTTP
-call to the UOS. Once `CLOSED`, the WPS and Claims Repository will process the 'deleted'
-Kafka event and disable/delete any existing claims or tokens.
+When the user has completed uploading all files, the user contacts the UOS to move the
+`UploadContext` to the `LOCKED` state, preventing further changes (Data Stewards can
+lock the context as well, if needed). When the user is
+satisfied that all uploads are correct and complete, they ask a Data Steward to move
+the `UploadContext` to the `CLOSED` state. The Data Steward contacts the UOS to do
+this. Once `CLOSED`, only Data Steward can re-open the context.
 
 In summary:
 - UOS:
-  - The Data Steward role required to create `UploadContext`s
-  - A valid WPAT or the Data Steward role is required to change the state of an `UploadContext`.
+  - The Data Steward role required to create `UploadContext`s and grant upload claims
+  - A valid WPAT or the Data Steward role is required to change the state of an `UploadContext`
+    - Data Steward role required for all state changes except `OPEN` -> `LOCKED`
 - UCS:
   - Upserting/Deleting `UploadContext` requires an internal service mesh token
-  - Getting an upload url requires a valid WOT
+  - All file actions require a valid WOT
 
 For more information on the HTTP API, see the endpoint definitions below.
 
@@ -151,30 +155,30 @@ the user(s) for the given `UploadContext` (specified by ID). Without this claim,
 user cannot create a work package or upload files.
 
 ### UploadContext Update
-For now, only Data Stewards are allowed to change the state of an `UploadContext`.
-Therefore, a user must communicate with a Data Steward when they are ready to LOCK or CLOSE an `UploadContext`.
+Users are only allowed to make the initial change from `OPEN` to `LOCKED`. Only Data
+Stewards may move an `UploadContext` from `LOCKED` to `CLOSED`, `LOCKED` to `OPEN`, or
+from `CLOSED` to `OPEN`.
 
-The Data Steward calls the `PATCH /contexts/{context_id}` endpoint on the UCS API,
-authenticating the call with a WOT which also contains the context ID.
+The Data Steward calls the `PATCH /contexts/{context_id}` endpoint on the UOS API,
+which verifies their Data Steward role.
 The request body should contain at least the desired context state.
+
+The UOS relays requests to and responses from the UCS.
 
 The UCS updates the state of the `UploadContext` to `LOCKED`, `CLOSED`, or `OPEN`, as
 specified by the request. If the `UploadContext` is already in the given state, nothing
-happens and the UCS returns a successful response.
+happens and the UCS returns a successful response (relayed by the UOS).
 The initial state of the `UploadContext` is `OPEN`. When the user finishes uploading
-files, they can ask a Data Steward to set the Context to a semi-finalized state,
-`LOCKED`. It is possible that the user decides they need to make changes, such as
-uploading or removing a file, and in that case a Data Steward can revert the Context to `OPEN`.
-If no changes are needed, however, the user can request the Data Stewards to fully finalize the Context by setting
-it to `CLOSED`, after which point no changes can be made without opening a new
-`UploadContext`.
-If user tries to change the status of an `UploadContext` that's already set to `CLOSED`,
-they receive an error. Once the update operation is complete, the UCS publishes a Kafka
+files, they can lock the context themselves by calling the UOS with a WOT provided by
+the WPS. It is possible that the user decides they need to make changes, such as
+uploading or removing a file, and in that case a Data Steward can revert the Context to
+`OPEN`. If no changes are needed, however, the user can request the Data Stewards to 
+fully finalize the Context by setting it to `CLOSED`, after which point no changes
+can be made without re-opening the `UploadContext`.
+If user tries to change the status of an `UploadContext` that's not `OPEN`,
+they receive an error. Once an update operation is complete, the UCS publishes a Kafka
 event reflecting the latest state of the `UploadContext` and returns an HTTP response
 indicating the update was successful.
-
-In a future iteration of the upload path, users will directly update context state
-themselves via the Data Portal or `ghga-connector`.
 
 ![UploadContext State Diagram](./images/uc_state.png)
 
