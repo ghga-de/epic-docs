@@ -138,7 +138,7 @@ points to address:
 1. Update `WorkPackageRepository` logic to handle CRUD-ing "upload" work packages
 2. Revamp Work Order Tokens (see Additional Implementation Details)
 3. Listen for outbox events carrying `UploadContext` data, and store/delete the context IDs
-   1. For deletions, related work packages should be removed
+   - For deletions, related work packages should be removed
 4. Add `upload_access_url` to `AccessCheckConfig`
 5. Augment the `AccessCheckAdapter` so it can call `/upload-access/users/{user_id}/uploads/{context_id}`
 to check if a user has access to a given `UploadContext`
