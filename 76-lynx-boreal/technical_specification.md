@@ -371,7 +371,7 @@ CreateUploadContextWorkOrder:
   name: str
 
 UploadFileWorkOrder:
-   type: "upload" | "delete"
+   type: "upload" | "close" | "delete"
    file_id: str
    
 CreateFileWorkOrder:
