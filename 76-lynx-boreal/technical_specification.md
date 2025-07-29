@@ -141,7 +141,7 @@ points to address:
    - For deletions, related work packages should be removed
 4. Add `upload_access_url` to `AccessCheckConfig`
 5. Augment the `AccessCheckAdapter` so it can call `/upload-access/users/{user_id}/uploads/{context_id}`
-to check if a user has access to a given `UploadContext`
+   to check if a user has access to a given `UploadContext`
 6. Provide a way to distribute WOTs, either by modifying the
 `/work-packages/{work_package_id}/files/{file_id}/work-order-tokens` endpoint or
 creating a new endpoint
