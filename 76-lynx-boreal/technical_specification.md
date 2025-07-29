@@ -202,7 +202,7 @@ uploading or removing a file, and in that case a Data Steward can revert the Con
 fully finalize the Context by setting it to `CLOSED`, after which point no changes
 can be made without re-opening the `UploadContext`.
 If user tries to change the status of an `UploadContext` that's not `OPEN`,
-they receive an error. Once an update operation is complete, the UCS publishes a Kafka
+they receive an error. Once an update operation is complete, the UCS publishes an
 event reflecting the latest state of the `UploadContext` and returns an HTTP response
 indicating the update was successful.
 
