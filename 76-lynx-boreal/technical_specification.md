@@ -222,7 +222,7 @@ and receives a WPAT. The following is accomplished using the
 The request body includes the unencrypted checksum, the file alias, and possibly further information. The ID of the `UploadContext` is included in the path and also in the WOT.
    - The UCS ensures it doesn't already have a completed `FileUpload` for the same file, then adds the `FileUpload` to the associated `UploadContext`.
    - The UCS initiates a multipart upload for the file.
-   - The UCS publishes upsertion events to Kafka for both the `FileUpload` and `UploadContext` objects, and returns an HTTP response to the Connector indicating
+   - The UCS publishes upsertion events for both the `FileUpload` and `UploadContext` objects, and returns an HTTP response to the Connector indicating
 that the file upload was successfully initiated. 
      - The response contains the UCS-generated UUID4 identifier of the new file upload.
 
