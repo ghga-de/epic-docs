@@ -273,7 +273,7 @@ indicating the deletion was successful.
   - Request body must contain the required file upload details
   - Path arg and token must agree on context ID, and alias must match between body and token
 - `PATCH /contexts/{context_id}/uploads/{file_id}`: Conclude file upload in UCS
-  - Requires WOT
+  - Requires FileUploadWorkOrder WOT of type "close"
   - Sets the `FileUpload` status to `COMPLETE` and tells S3 to close the multipart upload.
   - Path args and token must agree on context ID and file ID
 - `DELETE /contexts/{context_id}/uploads/{file_id}`: Remove a `FileUpload` from the `UploadContext`
