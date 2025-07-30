@@ -143,7 +143,7 @@ points to address:
 3. Listen for outbox events carrying `UploadContext` data, and store/delete the context IDs
    - For deletions, related work packages should be removed
 4. Add `upload_access_url` to `AccessCheckConfig`
-5. Augment the `AccessCheckAdapter` so it can call `/upload-access/users/{user_id}/uploads/{context_id}`
+5. Augment the `AccessCheckAdapter` so it can call `/upload-access/users/{user_id}/contexts/{context_id}`
    to check if a user has access to a given `UploadContext`
 6. Provide a way to distribute WOTs, either by modifying the
 `/work-packages/{work_package_id}/files/{file_id}/work-order-tokens` endpoint or
@@ -308,18 +308,18 @@ indicating the deletion was successful.
   - Browsing for and revoking claims can be done through the upcoming Claims Browser
 
 #### Work Package Service:
-- `GET /users/{user_id}/uploads`: List all `UploadContext` IDs available to the user
-- `POST /work-packages/{work_package_id}/uploads/{context_id}/work-order-tokens`: Create a WOT for uploading files
+- `GET /users/{user_id}/contexts`: List all `UploadContext` IDs available to the user
+- `POST /work-packages/{work_package_id}/contexts/{context_id}/work-order-tokens`: Create a WOT for uploading files
   - Requires a Work Package Access Token, so the user must have already created a Work Package
   - The request body must contain the work type and file alias or ID, depending on the
     work type
 
 #### Claims Repository Service:
 - CRS Authentication for upload endpoints should match existing download counterparts
-- `GET /upload-access/users/{user_id}/uploads/{context_id}`: check if a user has access to a certain upload context
-- `POST /upload-access/users/{user_id}/uploads/{context_id}`: grant upload access
+- `GET /upload-access/users/{user_id}/contexts/{context_id}`: check if a user has access to a certain upload context
+- `POST /upload-access/users/{user_id}/contexts/{context_id}`: grant upload access
   - This is called by the UOS when the Data Steward grants a user upload access
-- `DELETE /upload-access/users/{user_id}/uploads/{context_id}`: revoke upload access
+- `DELETE /upload-access/users/{user_id}/contexts/{context_id}`: revoke upload access
 
 ### Payload Schemas for Events:
 
