@@ -146,8 +146,9 @@ points to address:
 5. Augment the `AccessCheckAdapter` so it can call `/upload-access/users/{user_id}/contexts/{context_id}`
    to check if a user has access to a given `UploadContext`
 6. Provide a way to distribute WOTs, either by modifying the
-`/work-packages/{work_package_id}/files/{file_id}/work-order-tokens` endpoint or
-creating a new endpoint
+   `/work-packages/{work_package_id}/files/{file_id}/work-order-tokens` endpoint or
+   replacing it with one or more endpoints that allow passing the type and
+   additional token content
 
 
 ### Claims Repository
