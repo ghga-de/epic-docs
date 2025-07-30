@@ -233,7 +233,7 @@ that the file upload was successfully initiated.
 
 ### File Upload Termination (Upload Completion)
 When the upload is complete, the connector automatically makes a request to the UCS
-endpoint `PATCH /contexts/{context_id}/uploads/{file_id}`.
+endpoint `PATCH /contexts/{context_id}/uploads/{file_id}` using a valid UploadFileWorkOrder WOT.
 This call instructs the UCS to communicate with the S3 instance and terminate (complete) the multipart upload.
 The UCS will update the `FileUpload` instance to `COMPLETED` and publish a Kafka event reflecting the new state.
 Finally, the UCS will return an HTTP response indicating the operation was successful.
