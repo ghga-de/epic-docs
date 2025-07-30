@@ -71,7 +71,10 @@ section. The published events and database storage are driven simultaneously by
 Hexkit's MongoKafkaDaoPublisher, which the UCS uses to store `UploadContext` and
 `FileUpload` instances. Anytime an `UploadContext` or `FileUpload` is created, modified,
 or deleted, the UCS publishes a Kafka event containing the latest state. This is done
-according to the Outbox Pattern (not described in further detail here).
+according to the Outbox Pattern (not described in further detail here). 
+Other services, like the IFRS and FIS will later consume these events as part of the
+official file upload and management strategy. Presently, the WPS and CRS will watch
+the `UploadContext` events to enforce authentication and work package management.
 
 #### Auth
 Before general users (not Data Stewards) can upload files, three things must happen:
