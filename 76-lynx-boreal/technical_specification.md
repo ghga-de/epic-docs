@@ -217,7 +217,7 @@ and receives a WPAT. The following is accomplished using the
 `ghga-connector` and the WPAT:
 
 1. The user initiates the upload process for a given single file (can be looped or batched):
-   - The Connector contacts the WPS and exchanges the WPAT for a WOT.
+   - The Connector contacts the WPS and exchanges the WPAT for a CreateFileWorkOrder WOT.
    - The Connector calls the UCS's `POST /contexts/{context_id}/uploads/` endpoint.
 The request body includes the unencrypted checksum, the file alias, and possibly further information. The ID of the `UploadContext` is included in the WOT.
    - The UCS ensures it doesn't already have a completed `FileUpload` for the same file, then adds the `FileUpload` to the associated `UploadContext`.
