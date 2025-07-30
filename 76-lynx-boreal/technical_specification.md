@@ -299,7 +299,7 @@ indicating the deletion was successful.
     - Only Data Stewards can do `LOCKED` -> `CLOSED` or `LOCKED` -> `OPEN`
     - Users are allowed to do `OPEN` -> `LOCKED`
   - Path arg and token must agree on context ID
-  - Request body must contain the new state of the context
+  - Request body must include the properties to update. Empty body has no effect.
   - In turn, calls the matching UCS endpoint
 - `POST /access`: Grant user access to an `UploadContext`
   - Requires Data Steward Role
