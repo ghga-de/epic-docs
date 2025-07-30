@@ -189,7 +189,7 @@ The Data Steward calls the `PATCH /contexts/{context_id}` endpoint on the UOS AP
 which verifies their Data Steward role.
 The request body should contain at least the desired context state.
 
-The UOS relays requests to and responses from the UCS.
+The UOS relays state change requests to and responses from the UCS.
 
 The UCS updates the state of the `UploadContext` to `LOCKED`, `CLOSED`, or `OPEN`, as
 specified by the request. If the `UploadContext` is already in the given state, nothing
