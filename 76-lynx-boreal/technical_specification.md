@@ -262,7 +262,7 @@ indicating the deletion was successful.
 #### Upload Controller Service:
 - `GET /contexts`: Retrieve all `UploadContexts`
   - Requires WOT
-  - Data Stewards can see all `UploadContexts`, while users can only see ones they have an active claim for.
+  - Returns all contexts 
 - `POST /contexts`: Create a new `UploadContext`
   - Requires CreateUploadWorkOrder WOT and only allowed for Data Stewards via the UOS.
 - `GET /contexts/{context_id}`: Retrieve an `UploadContext` by ID
@@ -311,6 +311,8 @@ indicating the deletion was successful.
 - `GET /users/{user_id}/uploads`: List all `UploadContext` IDs available to the user
 - `POST /work-packages/{work_package_id}/uploads/{context_id}/work-order-tokens`: Create a WOT for uploading files
   - Requires a Work Package Access Token, so the user must have already created a Work Package
+  - The request body must contain the work type and file alias or ID, depending on the
+    work type
 
 #### Claims Repository Service:
 - CRS Authentication for upload endpoints should match existing download counterparts
