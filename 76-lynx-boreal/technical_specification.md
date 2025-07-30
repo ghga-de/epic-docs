@@ -243,7 +243,7 @@ If applicable, the Connector proceeds with the next file in the upload batch.
 ### `FileUpload` Deletion
 The user, via the `ghga-connector` and a valid WPAT, makes a request to the
 `DELETE /contexts/{context_id}/uploads/{file_id}` endpoint, indicating they wish to
-delete a file from the associated Upload Context. If a valid WOT is supplied with the
+delete a file from the associated Upload Context. If a valid UploadFileWorkOrder WOT is supplied with the
 request, the UCS cancels the ongoing upload if it exists and deletes the `FileUpload`
 object from the database. It removes the reference from the `file_uploads` field in the
 `UploadContext` and publishes Kafka events reflecting the deletion of the `FileUpload` and the
