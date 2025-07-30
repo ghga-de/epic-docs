@@ -220,7 +220,7 @@ and receives a WPAT. The following is accomplished using the
    - The Connector contacts the WPS and exchanges the WPAT for a CreateFileWorkOrder WOT.
    - The Connector calls the UCS's `POST /contexts/{context_id}/uploads/` endpoint.
 The request body includes the unencrypted checksum, the file alias, and possibly further information. The ID of the `UploadContext` is included in the path and also in the WOT.
-   - The UCS ensures it doesn't already have a completed `FileUpload` for the same file, then adds the `FileUpload` to the associated `UploadContext`.
+   - The UCS ensures the `UploadContext` is currently open and doesn't already have a completed `FileUpload` for the same file alias, then adds the `FileUpload` to the associated `UploadContext`.
    - The UCS initiates a multipart upload for the file.
    - The UCS publishes upsertion events for both the `FileUpload` and `UploadContext` objects, and returns an HTTP response to the Connector indicating
 that the file upload was successfully initiated. 
