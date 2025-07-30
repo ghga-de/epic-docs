@@ -227,7 +227,7 @@ that the file upload was successfully initiated.
      - The response contains the UCS-generated UUID4 identifier of the new file upload.
 
 2. The Connector uploads the file in chunks:
-   - For each file part, the Connector uses a valid WOT (or gets a new one) to call the UCS's `GET /contexts/{context_id}/uploads/{file_id}/parts/{part_no}` endpoint.
+   - For each file part, the Connector uses a valid UploadFileWorkOrder WOT (or gets a new one) to call the UCS's `GET /contexts/{context_id}/uploads/{file_id}/parts/{part_no}` endpoint.
    - Assuming the WOT is valid, the UCS returns a presigned, short-lived upload URL.
    - The Connector uploads the file parts until complete.
 
