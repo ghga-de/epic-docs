@@ -151,15 +151,23 @@ creating a new endpoint
 
 
 ### Claims Repository
-Currently, the CRS only manages claims for `datasets`. Claims' visa values for download
-access to datasets are a combination of a hardcoded prefix (specific to datasets in
-general) and a dataset ID. There are also specific functions to determine if given claim
-is for a dataset and if so, which dataset that is - such as `get_dataset_for_value()`.
-`create_controlled_access_claim()` should be modified to work for both up- and download
-access.
+1. Extend the access API (not the claims API, which is not active at the moment) to also
+support upload grants. The new endpoints here will be used by the UOS and the WPS for
+granting and verifying access.
 
-The CRS needs new HTTP endpoints for managing `UploadContext`-specific claims.
-Please see the API Definitions for details.
+Please see the API Definitions for details on the endpoints for extending the
+access API.
+
+2. Create a new visa type. The currently-used visas for download,
+ControlledAccessGrants, imply download access and should therefore not be used as upload
+visas. Instead, we should create a new visa:
+
+type: `GHGA_UPLOAD = "https://www.ghga.de/GA4GH/VisaTypes/Upload/v1.0"`
+value: `https://ghga.de/uploads/{context_id}`
+
+We will have to extend the utilities surrounding visa handling to accommodate this
+new visa type in the core `claims` module because all the logic there is download-
+centric.
 
 ## User Journeys
 
