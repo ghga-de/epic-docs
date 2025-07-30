@@ -261,7 +261,7 @@ indicating the deletion was successful.
 - `POST /contexts`: Create a new `UploadContext`
   - Requires WOT and only allowed for Data Stewards via the UOS.
 - `GET /contexts/{context_id}`: Retrieve an `UploadContext` by ID
-  - Requires WOT
+  - Requires ViewUploadContextWorkOrder WOT issued by UOS
   - Data Stewards can see all `UploadContexts`, while users can only see ones they have an active claim for.
   - Path arg and token must agree on context ID
 - `PATCH /contexts/{context_id}`: Update the state of an `UploadContext`
