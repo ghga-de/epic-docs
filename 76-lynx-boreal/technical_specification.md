@@ -288,7 +288,7 @@ indicating the deletion was successful.
 - `POST /contexts`: Create a new `UploadContext` and grant a claim for it for a user
   - Requires Data Steward Role
   - Request body must contain at least one user ID (whether this is one ID or a list of IDs can be decided during implementation)
-  - Uses a token to instruct the UCS to create a new `UploadContext` via HTTP call
+  - Uses a self-issued WOT to instruct the UCS to create a new `UploadContext` via HTTP call
 - `PATCH /contexts/{context_id}`: Update the state of an `UploadContext`
   - Requires Data Steward Role *or* valid claim to the context
     - Only Data Stewards can do `LOCKED` -> `CLOSED` or `LOCKED` -> `OPEN`
