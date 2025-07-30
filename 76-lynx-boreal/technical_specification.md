@@ -73,8 +73,8 @@ Hexkit's MongoKafkaDaoPublisher, which the UCS uses to store `UploadContext` and
 or deleted, the UCS publishes a Kafka event containing the latest state. This is done
 according to the Outbox Pattern (not described in further detail here). 
 Other services, like the IFRS and FIS will later consume these events as part of the
-official file upload and management strategy. Presently, the WPS and CRS will watch
-the `UploadContext` events to enforce authentication and work package management.
+official file upload and management strategy. Presently, the WPS will watch
+the `UploadContext` events to enable proper work package management.
 
 #### Auth
 Before general users (not Data Stewards) can upload files, three things must happen:
@@ -140,8 +140,8 @@ to be updated to accommodate "upload" work packages. To this end, these are the 
 points to address:
 1. Update `WorkPackageRepository` logic to handle CRUD-ing "upload" work packages
 2. Revamp Work Order Tokens (see Additional Implementation Details)
-3. Listen for outbox events carrying `UploadContext` data, and store/delete the context IDs
-   - For deletions, related work packages should be removed
+3. Listen for outbox events carrying `UploadContext` data, and store the context IDs
+   - Context deletion is not allowed in this version of the upload path. We can add it later.
 4. Change `AccessCheckConfig.download_access_url` to `AccessCheckConfig.access_url` to work for both up- and download
 5. Augment the `AccessCheckAdapter` so it can call `/upload-access/users/{user_id}/contexts/{context_id}`
    to check if a user has access to a given `UploadContext`
@@ -178,10 +178,7 @@ centric.
 A Data Steward makes a call to the UOS to create a new `UploadContext`.
 The UOS calls the UCS's `POST /contexts` endpoint to create the actual `UploadContext`
 with the state set to `OPEN`. The UCS issues an outbox event, which is consumed by the
-Work Package Service. The CRS also gets this outbox event, but ignores it. The CRS only
-cares if an `UploadContext` is *deleted*, in which case it revokes any linked claims.
-
-> Actually deleting `UploadContext`s is probably a rare occasion, not the norm.
+Work Package Service. The CRS also gets this outbox event, but ignores it.
 
 The UOS receives the new `UploadContext` ID from the UCS and returns it to the Data
 Steward. The Data Steward then calls the UOS endpoint `POST /access`, supplying the
@@ -429,7 +426,6 @@ Tests need to cover at least the following items (not exhaustive):
 - Maybe the UOS could preemptively generate `UploadContext`s if it can associate them
 with studies?
   - Is there a way the ARS could facilitate the first part of the upload process?
-- In what cases would we *delete* an `UploadContext` aside from fixing some mistake?
 - When should the WPS invalidate WorkPackages for a context?
 
 
