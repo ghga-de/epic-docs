@@ -269,7 +269,7 @@ indicating the deletion was successful.
   - Path arg and token must agree on context ID
   - Request body must contain the new state of the context
 - `POST /contexts/{context_id}/uploads/`: Add a new `FileUpload` to an existing `UploadContext`
-  - Requires WOT
+  - Requires CreateFileUploadWorkOrder WOT
   - Request body must contain the required file upload details
   - Path arg and token must agree on context ID, and alias must match between body and token
 - `PATCH /contexts/{context_id}/uploads/{file_id}`: Conclude file upload in UCS
