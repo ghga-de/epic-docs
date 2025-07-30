@@ -142,7 +142,7 @@ points to address:
 2. Revamp Work Order Tokens (see Additional Implementation Details)
 3. Listen for outbox events carrying `UploadContext` data, and store/delete the context IDs
    - For deletions, related work packages should be removed
-4. Add `upload_access_url` to `AccessCheckConfig`
+4. Change `AccessCheckConfig.download_access_url` to `AccessCheckConfig.access_url` to work for both up- and download
 5. Augment the `AccessCheckAdapter` so it can call `/upload-access/users/{user_id}/contexts/{context_id}`
    to check if a user has access to a given `UploadContext`
 6. Provide a way to distribute WOTs, either by modifying the
