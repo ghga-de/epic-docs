@@ -163,6 +163,8 @@ Please see the API Definitions for details.
 
 ## User Journeys
 
+![File Upload Sequence](./images/upload_sequence.png)
+
 ### UploadContext Creation
 A Data Steward makes a call to the UOS to create a new `UploadContext`.
 The UOS calls the UCS's `POST /contexts` endpoint to create the actual `UploadContext`
@@ -412,10 +414,6 @@ with studies?
   - Is there a way the ARS could facilitate the first part of the upload process?
 - In what cases would we *delete* an `UploadContext` aside from fixing some mistake?
 - When should the WPS invalidate WorkPackages for a context?
-
-
-## Diagrams
-![File Upload Sequence](./images/upload_sequence.png)
 
 
 ## Human Resource/Time Estimation:
