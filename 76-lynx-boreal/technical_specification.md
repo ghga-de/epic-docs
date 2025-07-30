@@ -176,7 +176,9 @@ cares if an `UploadContext` is *deleted*, in which case it revokes any linked cl
 
 The UOS receives the new `UploadContext` ID from the UCS and returns it to the Data
 Steward. The Data Steward then calls the UOS endpoint `POST /access`, supplying the
-user ID and context ID, plus any other required data, such as access expiry.
+user ID, user IVA ID, context ID, plus any other required data, such as access expiry,
+in order to grant the user an access claim. The user must first have a valid and validated 
+IVA just like in the download path.
 
 Finally, the UOS makes a call to the CRS to award an upload claim to
 the user for the given `UploadContext` (specified by ID). Without this claim, the
@@ -304,7 +306,11 @@ indicating the deletion was successful.
 - `POST /access`: Grant user access to an `UploadContext`
   - Requires Data Steward Role
   - Instructs the CRS to create a new claim for each specified user
-  - Request body must contain upload context ID and user ID, plus any other req'd info.
+  - Request body must contain:
+    - `UploadContext` ID
+    - User ID
+    - IVA ID
+    - Any other pertinent information, such as access expiration date.
   - Browsing for and revoking claims can be done through the upcoming Claims Browser
 
 #### Work Package Service:
@@ -317,7 +323,7 @@ indicating the deletion was successful.
 #### Claims Repository Service:
 - CRS Authentication for upload endpoints should match existing download counterparts
 - `GET /upload-access/users/{user_id}/contexts/{context_id}`: check if a user has access to a certain upload context
-- `POST /upload-access/users/{user_id}/contexts/{context_id}`: grant upload access
+- `POST /upload-access/users/{user_id}/ivas/{iva_id}/contexts/{context_id}`: grant upload access
   - This is called by the UOS when the Data Steward grants a user upload access
 - `DELETE /upload-access/users/{user_id}/contexts/{context_id}`: revoke upload access
 
