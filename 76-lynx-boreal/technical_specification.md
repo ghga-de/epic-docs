@@ -277,7 +277,7 @@ indicating the deletion was successful.
   - Sets the `FileUpload` status to `COMPLETE` and tells S3 to close the multipart upload.
   - Path args and token must agree on context ID and file ID
 - `DELETE /contexts/{context_id}/uploads/{file_id}`: Remove a `FileUpload` from the `UploadContext`
-  - Requires WOT
+  - Requires FileUploadWorkOrder WOT of type "delete"
   - Deletes the `FileUpload` and tells S3 to cancel the multipart upload if applicable.
   - Path args and token must agree on context ID and file ID
 - `GET /contexts/{context_id}/uploads/{file_id}/parts/{part_no}`: Get pre-signed S3 upload URL for file part
