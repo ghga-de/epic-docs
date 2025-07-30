@@ -224,7 +224,7 @@ The request body includes the unencrypted checksum, the file alias, and possibly
    - The UCS initiates a multipart upload for the file.
    - The UCS publishes upsertion events for both the `FileUpload` and `UploadContext` objects, and returns an HTTP response to the Connector indicating
 that the file upload was successfully initiated. 
-     - The response contains the UCS-generated UUID4 identifier of the new file upload.
+     - The response contains the UCS-generated file id (UUID4) of the new file upload.
 
 2. The Connector uploads the file in chunks:
    - For each file part, the Connector uses a valid UploadFileWorkOrder WOT (or gets a new one) to call the UCS's `GET /contexts/{context_id}/uploads/{file_id}/parts/{part_no}` endpoint.
