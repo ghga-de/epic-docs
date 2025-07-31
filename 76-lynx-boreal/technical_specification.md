@@ -269,7 +269,7 @@ indicating the deletion was successful.
 
 #### Upload Controller Service:
 - `GET /contexts`: Retrieve all `UploadContexts`
-  - Requires WOT
+  - Requires ViewUploadContextWorkOrder WOT
   - Returns all contexts 
 - `POST /contexts`: Create a new `UploadContext`
   - Requires CreateUploadWorkOrder WOT and only allowed for Data Stewards via the UOS.
