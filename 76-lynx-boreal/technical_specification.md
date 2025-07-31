@@ -345,6 +345,7 @@ indicating the deletion was successful.
 
 #### Claims Repository Service:
 - CRS Authentication for upload endpoints should match existing download counterparts
+- `GET /upload-access/users/{user_id}/contexts`: lists which `UploadContext`s a user can access
 - `GET /upload-access/users/{user_id}/contexts/{context_id}`: check if a user has access to a certain upload context
 - `POST /upload-access/users/{user_id}/ivas/{iva_id}/contexts/{context_id}`: grant upload access
   - This is called by the UOS when the Data Steward grants a user upload access
