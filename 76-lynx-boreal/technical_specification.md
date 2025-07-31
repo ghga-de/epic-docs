@@ -282,35 +282,38 @@ indicating the deletion was successful.
 
 #### Upload Controller Service:
 - `POST /contexts`: Create a new `UploadContext`
-  - Requires `CreateUploadWorkOrder` WOT and only allowed for Data Stewards via the UOS.
+  - Requires `CreateUploadWorkOrder` token and only allowed for Data Stewards via the UOS.
   - Returns the `context_id` of the newly created `UploadContext`
 - `GET /contexts/{context_id}`: Retrieve an `UploadContext` by ID
-  - Requires `ViewUploadContextWorkOrder` WOT issued by UOS
+  - Requires `ViewUploadContextWorkOrder` token issued by UOS
   - Path arg and token must agree on context ID
 - `PATCH /contexts/{context_id}`: Update the state of an `UploadContext`
-  - Currently only available to Data Stewards, as only they can obtain the required token.
+  - Requires `UpdateUploadContextWorkOrder` token issued by UOS
+  - Currently only available to Data Stewards
   - Path arg and token must agree on context ID
   - Request body must contain the new state of the context
-- `POST /contexts/{context_id}/uploads/`: Add a new `FileUpload` to an existing `UploadContext`
-  - Requires `CreateFileWorkOrder` token
+- `GET /contexts/{context_id}/uploads`: Retrieve list of file IDs for context
+  - Requires a `ViewUploadContextWorkOrder` token signed by the UOS
+  - Path arg and token must agree on context ID
+- `POST /contexts/{context_id}/uploads`: Add a new `FileUpload` to an existing `UploadContext`
+  - Requires `CreateFileWorkOrder` token from WPS
   - Request body must contain the required file upload details
   - Path arg and token must agree on context ID, and alias must match between body and token
 - `GET /contexts/{context_id}/uploads/{file_id}/parts/{part_no}`: Get pre-signed S3 upload URL for file part
-  - Requires `UploadFileWorkOrder` token of type "upload"
+  - Requires `UploadFileWorkOrder` token of type "upload" from WPS
   - Path args and token must agree on context ID and file ID
 - `PATCH /contexts/{context_id}/uploads/{file_id}`: Conclude file upload in UCS
-  - Requires `UploadFileWorkOrder` token of type "close"
+  - Requires `UploadFileWorkOrder` token of type "close" from WPS
   - Sets the `FileUpload` status to `COMPLETE` and tells S3 to close the multipart upload.
   - Path args and token must agree on context ID and file ID
 - `DELETE /contexts/{context_id}/uploads/{file_id}`: Remove a `FileUpload` from the `UploadContext`
-  - Requires `UploadFileWorkOrder` token of type "delete"
+  - Requires `UploadFileWorkOrder` token of type "delete" from WPS
   - Deletes the `FileUpload` and tells S3 to cancel the multipart upload if applicable.
   - Path args and token must agree on context ID and file ID
 
 #### Upload Orchestration Service:
 - `GET /contexts/{context_id}`: Retrieve an `UploadContext` by ID
   - Signs a `ViewUploadContextWorkOrder` token and relays request to UCS
-  - Path arg and token must agree on context ID
 - `POST /contexts`: Create a new `UploadContext` and grant a claim for it for a user
   - Requires Data Steward Role
   - Signs a `CreateUploadWorkOrder` token and relays request to the UCS
@@ -319,7 +322,6 @@ indicating the deletion was successful.
   - Requires Data Steward Role *or* valid claim to the context
     - Only Data Stewards can do `LOCKED` -> `CLOSED` or `LOCKED` -> `OPEN`
     - Users are allowed to do `OPEN` -> `LOCKED`
-  - Path arg and token must agree on context ID
   - Request body must include the properties to update. Empty body has no effect.
   - Signs an `UpdateUploadContextWorkOrder` token and calls the matching UCS endpoint
 - `POST /access`: Grant user access to an `UploadContext`
@@ -331,6 +333,8 @@ indicating the deletion was successful.
     - IVA ID
     - Any other pertinent information, such as access expiration date.
   - Browsing for and revoking claims can be done through the upcoming Claims Browser
+- `GET /contexts/{context_id}/uploads`: Retrieve list of file IDs for context
+  - Signs a `ViewUploadContextWorkOrder` token and calls matching UCS endpoint
 
 #### Work Package Service:
 - `GET /users/{user_id}/contexts`: List all `UploadContext` IDs available to the user
