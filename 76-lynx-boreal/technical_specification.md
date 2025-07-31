@@ -359,6 +359,7 @@ class UploadContext(BaseModel):
 
     context_id: UUID4 # unique identifier for the instance
     state: UploadContextState  # one of OPEN, LOCKED, CLOSED
+    name: str  # short meaningful name for the context
     description: str  # used to help distinguish contexts since they aren't linked to studies
     file_uploads: list[FileUpload]  # use list function for default_factory
 
@@ -373,7 +374,7 @@ class FileUpload(BaseModel):
 
     upload_id: UUID4
     state: FileUploadState  # one of INIT, COMPLETED
-    original_path: str  # subject to change, used to match file upload to metadata
+    alias: str  # the submitted alias from the metadata
     checksum: str
 ```
 
