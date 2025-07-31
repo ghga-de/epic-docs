@@ -87,8 +87,7 @@ Service requires just one flavor of WOT to operate, the UCS requires several:
 | `ChangeUploadContextWorkOrder` | UOS    | Data Stewards        | Update an existing `UploadContext`               |
 | `ViewUploadContextWorkOrder`   | UOS    | Users, Data Stewards | View one or more `UploadContexts`                |
 | `CreateFileWorkOrder`          | WPS    | Users                | Initialize a `FileUpload` and obtain new file ID |
-| `DeleteFileUploadWorkOrder`    | WPS    | Users                | Delete a `FileUpload` from an `UploadContext`    |
-| `UploadFileWorkOrder`          | WPS    | Users                | Obtain a part upload URL for a given file ID     |
+| `UploadFileWorkOrder`          | WPS    | Users                | Obtain a part upload URL for a given file ID. Can also be used to delete the file. |
 
 These tokens authorize users to perform the labeled action within the UCS, and they only
 carry information necessary for the given action, such as `file_id` or `context_id`.
@@ -119,8 +118,8 @@ each file part.
 3. A final PATCH request to the UCS to complete the file upload.
    - This uses the same `UploadFileWorkOrder` token.
 
-Should the user desire to delete a file, they obtain a `DeleteFileUploadWorkOrder`
-token from the WPS and perform a DELETE request via the `ghga-connector`.
+Should the user desire to delete a file, they obtain a `UploadFileWorkOrder` token of
+type "delete" from the WPS and perform a DELETE request via the `ghga-connector`.
 
 When the user has completed uploading all files, the user contacts the UOS to move the
 `UploadContext` to the `LOCKED` state, preventing further changes (Data Stewards can
@@ -270,7 +269,7 @@ If applicable, the Connector proceeds with the next file in the upload batch.
 ### `FileUpload` Deletion
 The user, via the `ghga-connector` and a valid WPAT, makes a request to the
 `DELETE /contexts/{context_id}/uploads/{file_id}` endpoint, indicating they wish to
-delete a file from the associated Upload Context. If a valid `DeleteFileWorkOrder` token is supplied with the
+delete a file from the associated Upload Context. If a valid `UploadFileWorkOrder` token of type "delete" is supplied with the
 request, the UCS cancels the ongoing upload if it exists and deletes the `FileUpload`
 object from the database. It removes the reference from the `file_uploads` field in the
 `UploadContext` and publishes events reflecting the deletion of the `FileUpload` and the
@@ -293,33 +292,36 @@ indicating the deletion was successful.
   - Path arg and token must agree on context ID
   - Request body must contain the new state of the context
 - `POST /contexts/{context_id}/uploads/`: Add a new `FileUpload` to an existing `UploadContext`
-  - Requires CreateFileUploadWorkOrder WOT
+  - Requires `CreateFileWorkOrder` token
   - Request body must contain the required file upload details
   - Path arg and token must agree on context ID, and alias must match between body and token
+- `GET /contexts/{context_id}/uploads/{file_id}/parts/{part_no}`: Get pre-signed S3 upload URL for file part
+  - Requires `UploadFileWorkOrder` token of type "upload"
+  - Path args and token must agree on context ID and file ID
 - `PATCH /contexts/{context_id}/uploads/{file_id}`: Conclude file upload in UCS
-  - Requires FileUploadWorkOrder WOT of type "close"
+  - Requires `UploadFileWorkOrder` token of type "close"
   - Sets the `FileUpload` status to `COMPLETE` and tells S3 to close the multipart upload.
   - Path args and token must agree on context ID and file ID
 - `DELETE /contexts/{context_id}/uploads/{file_id}`: Remove a `FileUpload` from the `UploadContext`
-  - Requires FileUploadWorkOrder WOT of type "delete"
+  - Requires `UploadFileWorkOrder` token of type "delete"
   - Deletes the `FileUpload` and tells S3 to cancel the multipart upload if applicable.
-  - Path args and token must agree on context ID and file ID
-- `GET /contexts/{context_id}/uploads/{file_id}/parts/{part_no}`: Get pre-signed S3 upload URL for file part
-  - Requires FileUploadWorkOrder WOT of type "upload"
   - Path args and token must agree on context ID and file ID
 
 #### Upload Orchestration Service:
+- `GET /contexts/{context_id}`: Retrieve an `UploadContext` by ID
+  - Signs a `ViewUploadContextWorkOrder` token and relays request to UCS
+  - Path arg and token must agree on context ID
 - `POST /contexts`: Create a new `UploadContext` and grant a claim for it for a user
   - Requires Data Steward Role
-  - Request body must contain at least one user ID (whether this is one ID or a list of IDs can be decided during implementation)
-  - Uses a self-issued WOT to instruct the UCS to create a new `UploadContext` via HTTP call
+  - Signs a `CreateUploadWorkOrder` token and relays request to the UCS
+  - Returns the ID of the newly created `UploadContext`
 - `PATCH /contexts/{context_id}`: Update the state of an `UploadContext`
   - Requires Data Steward Role *or* valid claim to the context
     - Only Data Stewards can do `LOCKED` -> `CLOSED` or `LOCKED` -> `OPEN`
     - Users are allowed to do `OPEN` -> `LOCKED`
   - Path arg and token must agree on context ID
   - Request body must include the properties to update. Empty body has no effect.
-  - In turn, calls the matching UCS endpoint
+  - Signs an `UpdateUploadContextWorkOrder` token and calls the matching UCS endpoint
 - `POST /access`: Grant user access to an `UploadContext`
   - Requires Data Steward Role
   - Instructs the CRS to create a new claim for each specified user
@@ -411,11 +413,7 @@ CreateFileWorkOrder:
   context_id: str
 
 UploadFileWorkOrder:
-   type: "upload" | "close"
-   file_id: str
-
-DeleteFileWorkOrder:
-   type: "delete"
+   type: "upload" | "close" | "delete"
    file_id: str
 ```
 
