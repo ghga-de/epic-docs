@@ -20,6 +20,7 @@ epic.
 - Adapt WPS for "upload" work packages and tokens
 - Adapt CRS to also manage claims for upload contexts
 - Write Unit and Integration Tests
+- Add `UploadContext` and `FileUpload` schemas to `ghga-event-schemas`
 
 ### Not included:
 - Archive test bed integration
@@ -33,11 +34,11 @@ epic.
 This epic introduces a new lightweight service to handle authentication concerns while
 preserving the boundary between file services and auth concerns like user IDs and roles.
 
-All UCS actions will require a Work Order Token (WOT), which can only be created from
+All publicly expose UCS endpoints will require a Work Order Token (WOT), which can only be created from
 existing Work Packages in the Work Package Service (WPS) based on claims in the Claims
 Repository Service (CRS). We don't want Data Stewards interacting directly with the
-CRS to create the claim, but the UCS likewise shouldn't be responsible for creating
-the claim. Recognizing that enabling file uploads and creating the upload claim are
+CRS to create claims, but the UCS shouldn't be aware of claims or user identities either.
+Recognizing that enabling file uploads and creating upload claims are
 bundled actions, we will instead delegate these things to a new service, the UOS.
 Data Stewards will query the UOS HTTP API to enable uploads for a new study (i.e. create
 a new `UploadContext`) and create the required upload claims for the user.
@@ -77,59 +78,71 @@ official file upload and management strategy. Presently, the WPS will watch
 the `UploadContext` events to enable proper work package management.
 
 #### Auth
+**Tokens**  
+The UCS secures its endpoints through WOT authentication. While the Download Controller
+Service requires just one flavor of WOT to operate, the UCS requires several:
+| Token                          | Issuer | Who                  | Action Authorized                                |
+|--------------------------------|--------|----------------------|--------------------------------------------------|
+| `CreateUploadContextWorkOrder` | UOS    | Data Stewards        | Create a new `UploadContext`                     |
+| `ChangeUploadContextWorkOrder` | UOS    | Data Stewards        | Update an existing `UploadContext`               |
+| `ViewUploadContextWorkOrder`   | UOS    | Users, Data Stewards | View one or more `UploadContexts`                |
+| `CreateFileWorkOrder`          | WPS    | Users                | Initialize a `FileUpload` and obtain new file ID |
+| `DeleteFileUploadWorkOrder`    | WPS    | Users                | Delete a `FileUpload` from an `UploadContext`    |
+| `UploadFileWorkOrder`          | WPS    | Users                | Obtain a part upload URL for a given file ID     |
+
+These tokens authorize users to perform the labeled action within the UCS, and they only
+carry information necessary for the given action, such as `file_id` or `context_id`.
+
+**Claims and Work Packages**
 Before general users (not Data Stewards) can upload files, three things must happen:
 1. A Data Steward must create the `UploadContext` via the Upload Orchestration Service.
-   - This requires an `CreateUploadContextWorkOrder` token.
-   - The Data Steward does not provide a WOT themselves, but the UOS signs and sends
-a WOT along when it makes the request to the UCS.
+   - The UOS signs a `CreateUploadContextWorkOrder` token and contacts the UCS.
 2. A Data Steward must grant the user a claim enabling them to use the `UploadContext`.
+   - No token is required here, the UOS just verifies the Data Steward role exists.
 3. The user must create a Work Package via the Data Portal to obtain a Work Package
 Access Token (WPAT). Only one WPAT is needed for the entire series of files under normal
 circumstances.
+   - No token is required to create the WPAT.
 
 The user then supplies the WPAT to the `ghga-connector` to upload files.
 The `ghga-connector` obtains Work Order Tokens (WOTs) automatically by providing the
 WPAT to the WPS, and then makes at least three calls for each file:
 1. A POST request to the UCS to create the `FileUpload`.
-   - This requires a `CreateFileWorkOrder` token.
+   - This requires a `CreateFileWorkOrder` token from the WPS.
+   - The user supplies the file `alias` in this request.
+   - The user receives the `file_id` of the newly created `FileUpload`
 2. A GET request to the UCS to obtain a file part upload URL. This call is repeated for
 each file part.
-   - This requires an `UploadFileWorkOrder` token.
+   - This requires an `UploadFileWorkOrder` token from the WPS.
+   - The user supplies the `file_id` to get the above token.
+   - The token is only valid for a file with the matching `file_id`.
 3. A final PATCH request to the UCS to complete the file upload.
    - This uses the same `UploadFileWorkOrder` token.
 
-There is an important difference here from the download path's usage of WOTs: during
-download, WOTs carry the file ID being requested for download and the user can only
-request WOTs for file IDs that the WPS *knows* are available to the user. For upload,
-the user first specifies the alias of the file they want to upload. They use that token
-to create the `FileUpload`, and then they receive a file ID as a UUID4. To request
-file upload part URLs from the UCS, they have to obtain a different token that
-carries the UUID4 rather than the alias. In both cases, the WPS is ignorant of whether
-a file alias or ID is genuine, aside from being a valid string or UUID4. It merely
-grants the user access to upload a file that has that name or identifier. This
-restricts what action can be performed and what content an action can be performed with,
-without making the actual user jump through too many hoops to upload files that might
-or might not be final.
+Should the user desire to delete a file, they obtain a `DeleteFileUploadWorkOrder`
+token from the WPS and perform a DELETE request via the `ghga-connector`.
 
 When the user has completed uploading all files, the user contacts the UOS to move the
 `UploadContext` to the `LOCKED` state, preventing further changes (Data Stewards can
-lock the context as well, if needed). This requires a `ChangeUploadContextWorkOrder`
-token with the `type` set to the target state. When the user is
+lock the context as well, if needed). The UOS signs a `ChangeUploadContextWorkOrder`
+token and relays the request to the UCS. When the user is
 satisfied that all uploads are correct and complete, they ask a Data Steward to move
-the `UploadContext` to the `CLOSED` state. Closing the `UploadContext` requires a
-token that is unavailable to users, and is only produced by the UOS when prompted
-by a verified Data Steward.
-Once `CLOSED`, only Data Steward can re-open the context. Claims for closed
-`UploadContexts` remain valid; the UCS is responsible for filtering activity based on
-state.
+the `UploadContext` to the `CLOSED` state. Closing the `UploadContext` requires the user
+to be a Data Steward. Likewise, only a Data Steward can re-open the context once it
+has been `CLOSED`. Claims for closed `UploadContexts` remain valid; the UCS is
+responsible for filtering activity based on state.
 
 In summary:
 - UOS:
+  - Inspects auth context details to discern between Data Stewards and regular users
+  - Communicates with the CRS
+  - Relays `UploadContext`-related requests to the UCS
+  - Signs UOS-owned WOTs for the requests it sends to the UCS.
   - The Data Steward role required to create `UploadContext`s and grant upload claims
-  - A valid WOT is required to change the state of an `UploadContext`
-    - Data Steward role required for all state changes except `OPEN` -> `LOCKED`
+  - Data Steward role required for all `UploadContext` changes except `OPEN` -> `LOCKED`
 - UCS:
-  - All actions on `UploadContexts` and `FileUploads` require a valid WOT
+  - Knows nothing about "users" or "claims"
+  - Endpoints require appropriate WOTs
 
 For more information on the HTTP API, see the endpoint definitions below.
 
@@ -178,7 +191,7 @@ centric.
 A Data Steward makes a call to the UOS to create a new `UploadContext`.
 The UOS calls the UCS's `POST /contexts` endpoint to create the actual `UploadContext`
 with the state set to `OPEN`. The UCS issues an outbox event, which is consumed by the
-Work Package Service. The CRS also gets this outbox event, but ignores it.
+Work Package Service (for now - in the future, more services will join).
 
 The UOS receives the new `UploadContext` ID from the UCS and returns it to the Data
 Steward. The Data Steward then calls the UOS endpoint `POST /access`, supplying the
@@ -230,9 +243,9 @@ and receives a WPAT. The following is accomplished using the
 `ghga-connector` and the WPAT:
 
 1. The user initiates the upload process for a given single file (can be looped or batched):
-   - The Connector contacts the WPS and exchanges the WPAT for a CreateFileWorkOrder WOT.
+   - The Connector contacts the WPS and exchanges the WPAT for a `CreateFileWorkOrder` token.
    - The Connector calls the UCS's `POST /contexts/{context_id}/uploads/` endpoint.
-The request body includes the unencrypted checksum, the file alias, and possibly further information. The ID of the `UploadContext` is included in the path and also in the WOT.
+The request body includes the unencrypted checksum, the file alias, and possibly further information. The WOT carries the context ID and file alias.
    - The UCS ensures the `UploadContext` is currently open and doesn't already have a completed `FileUpload` for the same file alias, then adds the `FileUpload` to the associated `UploadContext`.
    - The UCS initiates a multipart upload for the file.
    - The UCS publishes upsertion events for both the `FileUpload` and `UploadContext` objects, and returns an HTTP response to the Connector indicating
@@ -240,13 +253,14 @@ that the file upload was successfully initiated.
      - The response contains the UCS-generated file id (UUID4) of the new file upload.
 
 2. The Connector uploads the file in chunks:
-   - For each file part, the Connector uses a valid UploadFileWorkOrder WOT (or gets a new one) to call the UCS's `GET /contexts/{context_id}/uploads/{file_id}/parts/{part_no}` endpoint.
+   - For each file part, the Connector uses a valid `UploadFileWorkOrder` token (or gets a new one) to call the UCS's `GET /contexts/{context_id}/uploads/{file_id}/parts/{part_no}` endpoint.
+   - The WOT carries the file ID.
    - Assuming the WOT is valid, the UCS returns a presigned, short-lived upload URL.
    - The Connector uploads the file parts until complete.
 
 ### File Upload Termination (Upload Completion)
 When the upload is complete, the connector automatically makes a request to the UCS
-endpoint `PATCH /contexts/{context_id}/uploads/{file_id}` using a valid UploadFileWorkOrder WOT.
+endpoint `PATCH /contexts/{context_id}/uploads/{file_id}` using a valid `UploadFileWorkOrder` token.
 This call instructs the UCS to communicate with the S3 instance and terminate (complete) the multipart upload.
 The UCS will update the `FileUpload` instance to `COMPLETED` and publish a Kafka event reflecting the new state.
 Finally, the UCS will return an HTTP response indicating the operation was successful.
@@ -256,7 +270,7 @@ If applicable, the Connector proceeds with the next file in the upload batch.
 ### `FileUpload` Deletion
 The user, via the `ghga-connector` and a valid WPAT, makes a request to the
 `DELETE /contexts/{context_id}/uploads/{file_id}` endpoint, indicating they wish to
-delete a file from the associated Upload Context. If a valid UploadFileWorkOrder WOT is supplied with the
+delete a file from the associated Upload Context. If a valid `DeleteFileWorkOrder` token is supplied with the
 request, the UCS cancels the ongoing upload if it exists and deletes the `FileUpload`
 object from the database. It removes the reference from the `file_uploads` field in the
 `UploadContext` and publishes events reflecting the deletion of the `FileUpload` and the
@@ -268,14 +282,11 @@ indicating the deletion was successful.
 ### RESTful/Synchronous:
 
 #### Upload Controller Service:
-- `GET /contexts`: Retrieve all `UploadContexts`
-  - Requires ViewUploadContextWorkOrder WOT
-  - Returns all contexts 
 - `POST /contexts`: Create a new `UploadContext`
-  - Requires CreateUploadWorkOrder WOT and only allowed for Data Stewards via the UOS.
+  - Requires `CreateUploadWorkOrder` WOT and only allowed for Data Stewards via the UOS.
+  - Returns the `context_id` of the newly created `UploadContext`
 - `GET /contexts/{context_id}`: Retrieve an `UploadContext` by ID
-  - Requires ViewUploadContextWorkOrder WOT issued by UOS
-  - Data Stewards can see all `UploadContexts`, while users can only see ones they have an active claim for.
+  - Requires `ViewUploadContextWorkOrder` WOT issued by UOS
   - Path arg and token must agree on context ID
 - `PATCH /contexts/{context_id}`: Update the state of an `UploadContext`
   - Currently only available to Data Stewards, as only they can obtain the required token.
@@ -381,22 +392,30 @@ DownloadFileWorkOrder:  # replaces current `WorkOrderToken` model
    type: "download"
    file_id: str  # note: user information is no longer included
 
-ChangeUploadContextWorkOrder:
-   type: "lock" | "close" | "open"
-   context_id: str
-   
 CreateUploadContextWorkOrder:
   type: "create"
   name: str
 
-UploadFileWorkOrder:
-   type: "upload" | "close" | "delete"
-   file_id: str
-   
+ChangeUploadContextWorkOrder:
+   type: "lock" | "close" | "open"
+   context_id: str
+
+ViewUploadContextWorkOrder:
+   type: "view"
+   context_ids: list[str]
+
 CreateFileWorkOrder:
   type: "create"
   alias: str
   context_id: str
+
+UploadFileWorkOrder:
+   type: "upload" | "close"
+   file_id: str
+
+DeleteFileWorkOrder:
+   type: "delete"
+   file_id: str
 ```
 
 
@@ -415,7 +434,6 @@ Tests need to cover at least the following items (not exhaustive):
 - Make sure only Data Stewards can create, close, or reopen contexts
 - Users can only see upload contexts that they have a valid claim for
 - Data Stewards can see all upload contexts
-- Claims are *not* revoked when upload context is closed
 - Work packages are revoked/invalidated when upload context is closed
 - Users cannot create work packages for closed contexts
 - UCS rejects http requests for closed contexts even with a valid WOT
