@@ -268,6 +268,8 @@ be a change to the title or description, for example.
 The UOS verifies their Data Steward role is in the auth context and validates the
 request parameters. If there are no errors, the UOS updates its copy of the
 `DataUploadCase` and emits an outbox event and returns a successful response.
+The UOS will also emit an audit log event with the ID of the user who made the change
+as well as the timestamp.
 
 ### Work Package Creation
 > The user journey "`DataUploadCase` Creation` must have been completed.
@@ -441,7 +443,8 @@ class DataUploadCase(BaseModel):
     state: DataUploadCaseState  # one of OPEN, LOCKED, CLOSED
     title: str  # short meaningful name for the case
     description: str  # describes the upload case in more detail
-    upload_context: UploadContext
+    last_changed: UTCDatetime
+    changed_by: str  # ID of the user who performed the latest change
 
 class FileUploadState(StrEnum):
     """The allowed states for a FileUpload instance"""
@@ -457,6 +460,14 @@ class FileUpload(BaseModel):
     alias: str  # the submitted alias from the metadata
     checksum: str
     size: int
+
+class AuditRecord(BaseModel):
+  """A generic record for audit purposes"""
+
+  created: UTCDatetime
+  service: str
+  label: str
+  description: str
 ```
 
 
