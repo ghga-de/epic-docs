@@ -56,7 +56,7 @@ view, see the **User Journeys** for more detailed information.
 
 Both `UploadContext` and `FileUpload` changes are emitted as outbox events, but the
 UCS does not consume any events or store any other data. `UploadContext` events are
-consumed by the WPS and UOS while the `FileUploads` are consumed by other file services.
+consumed by the UOS while the `FileUploads` are consumed by other file services.
 
 The UCS has a REST API, but requests only come from two places: `ghga-connector` and the
 UOS. All endpoints are secured by Work Order Tokens (WOTs) signed by either the UOS (see
@@ -113,8 +113,7 @@ to be updated to accommodate "upload" work packages. To this end, these are the 
 points to address:
 1. Update `WorkPackageRepository` logic to handle CRUD-ing "upload" work packages
 2. Revamp Work Order Tokens (see Additional Implementation Details)
-3. Listen for outbox events carrying `UploadContext` data, and store the context IDs
-   - Context deletion is not allowed in this version of the upload path. We can add it later.
+3. Listen for outbox events carrying `DataUploadCase` data, and store the context IDs
 4. Change `AccessCheckConfig.download_access_url` to `AccessCheckConfig.access_url` to work for both up- and download
 5. Augment the `AccessCheckAdapter` so it can call `/upload-access/users/{user_id}/contexts/{context_id}`
    to check if a user has access to a given `UploadContext`
