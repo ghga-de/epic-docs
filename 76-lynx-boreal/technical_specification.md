@@ -163,7 +163,7 @@ Before general users (not Data Stewards) can upload files, three things must hap
 1. A Data Steward must create the `DataUploadCase`/`UploadContext` via the Data Portal.
    - The UOS signs a `CreateUploadContextWorkOrder` token and contacts the UCS.
 2. A Data Steward must grant the user a claim enabling them to use the `DataUploadCase`.
-   - No token is required here, the UOS just verifies the Data Steward role exists
+   - Internal auth token required here, the UOS verifies the Data Steward role exists
      before it contacts the CRS.
 3. The user must create a Work Package via the Data Portal to obtain a Work Package
 Access Token (WPAT). Only one WPAT is needed for the entire series of files under normal
@@ -215,10 +215,11 @@ consults the CRS to obtain a list of `DataUploadCase` IDs that the user may acce
   - Sends `DataUploadCase`-related requests to the UCS using self-signed WOTs
   - The Data Steward role is required to create `UploadContext`s and grant upload claims
   - Data Steward role is required for all `DataUploadCase` changes except `OPEN` -> `LOCKED`
-  - Viewing `DataUploadCase`s does not involve any WOTs
+  - Viewing `DataUploadCase`s does not involve any WOTs, just the internal auth tokens
+  - Endpoints are protected by requiring internal auth tokens
 - UCS:
   - Knows nothing about users, claims, studies, `DataUploadCase`s, etc.
-  - Endpoints require protected by WOTs that come from either the WPS or UOS
+  - Endpoints require protected by requiring WOTs that come from either the WPS or UOS
 
 For more information on the HTTP API, see the endpoint definitions below.
 
