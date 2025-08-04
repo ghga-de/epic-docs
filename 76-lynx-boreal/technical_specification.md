@@ -15,11 +15,11 @@ architectural concept is realized, the appropriate adaptations will follow in a 
 epic.
 
 ### Included/Required:
-- Create UOS
+- Implement new Upload Orchestrator Service as described below
 - Revamp existing UCS logic
 - Adapt WPS for "upload" work packages and tokens
 - Adapt CRS to also manage claims for upload contexts
-- Add `UploadContext` and `FileUpload` schemas to `ghga-event-schemas`
+- Add new schemas to `ghga-event-schemas`
 
 ### Not included:
 - Archive test bed integration
@@ -144,7 +144,7 @@ new visa type in the core `claims` module because all the logic there is downloa
 centric.
 
 ### Auth
-**Tokens**  
+#### Tokens
 The UCS secures its endpoints through WOT authentication. While the Download Controller
 Service requires just one flavor of WOT to operate, the UCS requires more:
 | Token                          | Issuer | Who                  | Action Authorized                                |
@@ -159,7 +159,7 @@ These tokens authorize users to perform the labeled action within the UCS, and t
 carry information necessary for the given action, such as `file_id` or `context_id` in
 addition to the work type.
 
-**For Enabling User Access to a New Upload Procedure**  
+#### For Enabling User Access to a New Upload Procedure
 Before general users (not Data Stewards) can upload files, three things must happen:
 1. A Data Steward must create the `DataUploadCase`/`UploadContext` via the Data Portal.
    - The UOS signs a `CreateUploadContextWorkOrder` token and contacts the UCS.
@@ -170,7 +170,7 @@ Before general users (not Data Stewards) can upload files, three things must hap
 Access Token (WPAT). Only one WPAT is needed for the entire series of files under normal
 circumstances.
 
-**For File Upload**  
+#### For File Upload
 The user then supplies the WPAT to the `ghga-connector` to upload files.
 The `ghga-connector` obtains Work Order Tokens (WOTs) automatically by providing the
 WPAT to the WPS, and then makes at least three calls for each file:
@@ -190,7 +190,7 @@ each file part.
    - The user performs a DELETE request via the `ghga-connector`.
 
 
-**For Altering an Existing `DataUploadCase`**  
+#### For Altering an Existing `DataUploadCase`
 - Modifying the details of an existing `DataUploadCase`, such as the title or description
   requires the user to have the Data Steward role.
 - Changing the state of a `DataUploadCase` from `OPEN` to `LOCKED` requires the user to
@@ -203,13 +203,13 @@ each file part.
   - The UCS and UOS are responsible for screening requests based on the state of a given
     `DataUploadCase`, `UploadContext`, or `FileUpload`, as applicable.
 
-**For Viewing/Accessing `DataUploadCase`s**  
+#### For Viewing/Accessing `DataUploadCase`s
 Data Stewards can see all `DataUploadCase`s, while other users can only see what belongs
 to them. The UOS checks the auth context for the Data Steward role to distinguish between
 the two categories of users. In the case of a regular user, the UOS additionally
 consults the CRS to obtain a list of `DataUploadCase` IDs that the user may access.
 
-**In summary**  
+#### In summary
 - UOS:
   - Inspects auth context details to discern between Data Stewards and regular users
   - Communicates with the CRS to create or consult claims
@@ -218,7 +218,7 @@ consults the CRS to obtain a list of `DataUploadCase` IDs that the user may acce
   - Data Steward role is required for all `DataUploadCase` changes except `OPEN` -> `LOCKED`
   - Viewing `DataUploadCase`s does not involve any WOTs
 - UCS:
-  - Knows nothing about "users", "claims", or `DataUploadCase`s
+  - Knows nothing about users, claims, studies, `DataUploadCase`s, etc.
   - Endpoints require protected by WOTs that come from either the WPS or UOS
 
 For more information on the HTTP API, see the endpoint definitions below.
