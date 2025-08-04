@@ -481,10 +481,22 @@ The existing WorkOrderToken model must be modified & renamed.
 The following new WOT schemas should be created in the WPS:
 
 ```python
+# Authored by the WPS:
 DownloadFileWorkOrder:  # replaces current `WorkOrderToken` model
    type: "download"
    file_id: str  # note: user information is no longer included
 
+CreateFileWorkOrder:
+  type: "create"
+  alias: str
+  context_id: str
+
+UploadFileWorkOrder:
+   type: "upload" | "close" | "delete"
+   file_id: str
+   context_id: str
+
+# Authored by the UOS
 CreateUploadContextWorkOrder:
   type: "create"
   name: str
@@ -495,16 +507,6 @@ ChangeUploadContextWorkOrder:
 
 ListFilesWorkOrder:
    type: "view"
-   context_id: str
-
-CreateFileWorkOrder:
-  type: "create"
-  alias: str
-  context_id: str
-
-UploadFileWorkOrder:
-   type: "upload" | "close" | "delete"
-   file_id: str
    context_id: str
 ```
 
