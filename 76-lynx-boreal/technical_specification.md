@@ -424,7 +424,7 @@ described above. In the case of a Data Steward, the UOS does not make the CRS ca
 class UploadContext(BaseModel):
   """A class representing a context that links files belonging to a single dataset"""
 
-  context_id: UUID4  # unique identifier for the instance
+  id: UUID4  # unique identifier for the instance
   mutable: bool  # Whether or not changes to the files in the context are allowed
   file_count: int  # The number of files in the context
   size: int  # The total size of all files in the context
@@ -436,10 +436,12 @@ class DataUploadCaseState(StrEnum):
     LOCKED = "locked"
     CLOSED = "closed"
 
-class DataUploadCase(BaseModel):
-    """A class representing a DataUploadCase"""
+class DataUploadCase(UploadContext):
+    """A class representing a DataUploadCase.
+    
+    Contains all fields from the UploadContext and shares IDs.
+    """
 
-    case_id: UUID4 # unique identifier for the instance
     state: DataUploadCaseState  # one of OPEN, LOCKED, CLOSED
     title: str  # short meaningful name for the case
     description: str  # describes the upload case in more detail
