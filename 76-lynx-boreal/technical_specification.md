@@ -39,7 +39,7 @@ anything about studies or other business concepts.
 
 In the UCS, a study is represented by a minimalistic abstraction called a
 `FileUploadBox`, and a file is represented as a `FileUpload`. The former offers a way to
-group file uploads and verify when changes are allowed. The latter offers specific
+group file uploads, lock them for changes and check the uniqueness of the included file aliases. The latter offers specific
 file information and a way for other services to be aware of that file's existence.
 
 Each `FileUploadBox` is labeled by a random UUID and has a boolean that determines
