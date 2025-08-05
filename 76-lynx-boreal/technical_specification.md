@@ -85,6 +85,7 @@ The other responsibility of the UOS is to relieve the UCS from handling browsing
 When anyone wants to view existing `ResearchDataUploadBoxes`, they talk to the UOS, not the UCS.
 This is a happy arrangement because viewing this content inherently involves auth:
 users should only be able to see a `ResearchDataUploadBox` if they actually have access to it.
+Also, the users can be provided with the richer information that is only available in the  `ResearchDataUploadBox`.
 
 How the UOS sits in relation to the UCS:  
 When there is a new study, a Data Steward logs on to the Data Portal and creates a new
