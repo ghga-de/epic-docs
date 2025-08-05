@@ -461,7 +461,7 @@ class FileUpload(BaseModel):
 
     upload_id: UUID4
     state: FileUploadState  # one of INIT, COMPLETE
-    alias: str  # the submitted alias from the metadata
+    alias: str  # the submitted alias from the metadata (unique within the box)
     checksum: str
     size: int
 
