@@ -103,7 +103,7 @@ Each `ResearchDataUploadBox` has a random UUID, a title, a description, a state 
 `LOCKED`, `CLOSED`), and the associated `FileUploadBox` from the UCS.
 Every change to a `ResearchDataUploadBox` triggers an outbox event, as well as a persistent
 event for auditing with the user ID, timestamp, and info about what action occurred.
-The UOS subscribes to `FileUploadBox` events but not `FileUpload` events.
+The UOS subscribes to `FileUploadBox` events in order to be informed when the file count or total size bytes of the upload box changes, but not `FileUpload` events.
 The UOS offers a REST API for users and Data Stewards, but these endpoints are covered
 by the auth protocol rather than WOTs. When a user interacts with the UCS via the UOS,
 the UOS signs its own WOTs (assuming everything else is copacetic) authorizing the
