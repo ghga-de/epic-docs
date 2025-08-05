@@ -468,6 +468,9 @@ class AuditRecord(BaseModel):
   service: str
   label: str
   description: str
+  action: Literal["C", "R", "U", "D"] | None = None
+  entity: str | None = None
+  entity_id: str | None = None
 ```
 
 
