@@ -200,8 +200,8 @@ each file part.
   have either a valid claim for the `ResearchDataUploadBox` or have the Data Steward role.
 - Changing the state of a `ResearchDataUploadBox` otherwise requires the Data Steward role.
 - When a `ResearchDataUploadBox` is set to `LOCKED` or `CLOSED`, the UOS signs a
-  `ChangeFileUploadBoxWorkOrder` of type "lock" and tells the UCS to make the
-  associated `FileUploadBox` immutable.
+  `ChangeFileUploadBoxWorkOrder` of type "lock" and tells the UCS to lock the
+  associated `FileUploadBox`.
 - Claims and work packages for closed `ResearchDataUploadBoxes` remain valid in the CRS 
   - The UCS and UOS are responsible for screening requests based on the state of a given
     `ResearchDataUploadBox`, `FileUploadBox`, or `FileUpload`, as applicable.
@@ -358,7 +358,7 @@ described above. In the case of a Data Steward, the UOS does not make the CRS ca
 - `POST /boxes`: Create a new `FileUploadBox`
   - Requires `CreateUploadWorkOrder` token and only allowed for Data Stewards via the UOS.
   - Returns the `box_id` of the newly created `FileUploadBox`
-- `PATCH /boxes/{box_id}`: Update a `FileUploadBox` (to make [im]mutable)
+- `PATCH /boxes/{box_id}`: Update a `FileUploadBox` (to lock/unlock)
   - Requires `ChangeFileUploadBoxWorkOrder` token issued by UOS
   - Currently only available to Data Stewards
   - Path arg and token must agree on box ID
@@ -426,18 +426,18 @@ described above. In the case of a Data Steward, the UOS does not make the CRS ca
 
 ```python
 class FileUploadBox(BaseModel):
-  """A class representing a box that links files belonging to a single dataset"""
+  """A class representing a box that bundles files belonging to the same upload"""
 
   id: UUID4  # unique identifier for the instance
-  mutable: bool  # Whether or not changes to the files in the box are allowed
-  file_count: int  # The number of files in the box
-  size: int  # The total size of all files in the box
+  locked: bool = False  # Whether or not changes to the files in the box are allowed
+  file_count: int = 0 # The number of files in the box
+  size: int = 0 # The total size of all files in the box
 
 class FileUpload(BaseModel):
     """A File Upload"""
 
     upload_id: UUID4
-    completed: bool  # whether or not the file upload has finished
+    completed: bool = False # whether or not the file upload has finished
     alias: str  # the submitted alias from the metadata (unique within the box)
     checksum: str
     size: int
@@ -520,11 +520,11 @@ Tests need to cover at least the following items (not exhaustive):
 - Standard endpoint authentication battery
 - Happy path for each endpoint
 - Core error translation for HTTP API for each endpoint
-- Disallow adding/uploading/deleting files in immutable `FileUploadBoxes`
+- Disallow adding/uploading/deleting files in locked `FileUploadBoxes`
 - Make sure only Data Stewards can create, close, or reopen a `ResearchDataUploadBox`
 - Users can only see `ResearchDataUploadBoxes` that they have a valid claim for
 - Data Stewards can see all `ResearchDataUploadBoxes`
-- UCS rejects http requests for immutable `FileUploadBoxes` even with a valid WOT
+- UCS rejects http requests for locked `FileUploadBoxes` even with a valid WOT
   - Exception being to re-open the `FileUploadBox`
 - UOS rejects requests for locked `ResearchDataUploadBoxes`, except to move state to `OPEN` or `CLOSED`
 
