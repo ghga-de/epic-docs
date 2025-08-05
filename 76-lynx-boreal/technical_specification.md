@@ -499,7 +499,6 @@ UploadFileWorkOrder:
 # Authored by the UOS
 CreateFileUploadBoxWorkOrder:
   type: "create"
-  name: str
 
 ChangeFileUploadBoxWorkOrder:
    type: "lock" | "unlock"
