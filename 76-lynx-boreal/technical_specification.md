@@ -432,7 +432,7 @@ described above. In the case of a Data Steward, the UOS does not make the CRS ca
 class FileUploadBox(BaseModel):
   """A class representing a box that bundles files belonging to the same upload"""
 
-  id: UUID4  # unique identifier for the instance
+  box_id: UUID4  # unique identifier for the instance
   locked: bool = False  # Whether or not changes to the files in the box are allowed
   file_count: int = 0 # The number of files in the box
   size: int = 0 # The total size of all files in the box
