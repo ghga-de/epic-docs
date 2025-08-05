@@ -54,7 +54,7 @@ create a work package for the new `FileUploadBox` and use the `ghga-connector` t
  the files for their study. That's the simplified mountaintop view. In reality, users and
 Data Stewards operate the UCS and the `FileUploadBox` indirectly via a service in the core
 domain called UOS, and a corresponding domain object called `ResearchDataUploadBox`.
-See the **User Journeys** for more detailed information.
+See the description of the UOS and the **User Journeys** for more detailed information.
 
 Both `FileUploadBox` and `FileUpload` changes are emitted as outbox events, but the
 UCS does not consume any events or store any other data. `FileUploadBox` events are
@@ -91,13 +91,12 @@ Also, the users can be provided with the richer information that is only availab
 
 How the UOS sits in relation to the UCS:  
 When there is a new study, a Data Steward logs on to the Data Portal and creates a new
-case, called a `ResearchDataUploadBox`, for uploading the research data. The Data Steward will
-enter at least a title and description so they can later identify the case. This info
-will flow from the Data Portal to the UOS, which will tell the UCS to create a new
-`FileUploadBox`. The UOS will save the ID of the `FileUploadBox` with the other info
-in the `ResearchDataUploadBox`. Then the Data Steward will grant the relevant user an upload
-access claim tied to the `FileUploadBox` or `ResearchDataUploadBox` by calling the UOS, which
-in turn talks to the CRS.
+object, called a `ResearchDataUploadBox`, for uploading the research data. The Data Steward will
+enter at least a title and description so they can later identify the box. This info
+will flow from the Data Portal to the UOS, which will tell the UCS to create a corresponding `FileUploadBox`. The UOS will save the ID of the `FileUploadBox` with the
+other info in the `ResearchDataUploadBox`. Then the Data Steward will grant the
+relevant user an upload access claim tied to the `FileUploadBox` or
+`ResearchDataUploadBox` by calling the UOS, which in turn talks to the CRS.
 
 Each `ResearchDataUploadBox` has a random UUID, a title, a description, a state (`OPEN`,
 `LOCKED`, `CLOSED`), and the associated `FileUploadBox` from the UCS.
@@ -117,7 +116,8 @@ to be updated to accommodate "upload" work packages. To this end, these are the 
 points to address:
 1. Update `WorkPackageRepository` logic to handle CRUD-ing "upload" work packages
 2. Revamp Work Order Tokens (see Additional Implementation Details)
-3. Listen for outbox events carrying `ResearchDataUploadBox` data, and store the box IDs
+3. Listen for outbox events carrying `ResearchDataUploadBox` data, and store the box
+   IDs and titles.
 4. Change `AccessCheckConfig.download_access_url` to `AccessCheckConfig.access_url` to work for both up- and download
 5. Augment the `AccessCheckAdapter` so it can call `/upload-access/users/{user_id}/boxes/{box_id}`
    to check if a user has access to a given `FileUploadBox`
@@ -153,12 +153,12 @@ Service requires just one flavor of WOT to operate, the UCS requires more:
 | Token                          | Issuer | Who                  | Action Authorized                                |
 |--------------------------------|--------|----------------------|--------------------------------------------------|
 | `CreateFileUploadBoxWorkOrder` | UOS    | Data Stewards        | Create a new `FileUploadBox`                     |
-| `ChangeFileUploadBoxWorkOrder` | UOS    | All                  | Update an existing `FileUploadBox`               |
+| `ChangeFileUploadBoxWorkOrder` | UOS    | All                  | Update the mutability of an existing `FileUploadBox`               |
 | `ListFilesWorkOrder`           | UOS    | All                  | View list of files for a `FileUploadBox`        |
 | `CreateFileWorkOrder`          | WPS    | Users                | Initialize a `FileUpload` and obtain new file ID |
 | `UploadFileWorkOrder`          | WPS    | Users                | Obtain a part upload URL for a given file ID. Can also be used to delete the file. |
 
-These tokens authorize users to perform the labeled action within the UCS, and they only
+These tokens authorize users to perform the labeled action (work type) within the UCS, and they only
 carry information necessary for the given action, such as `file_id` or `box_id` in
 addition to the work type.
 
@@ -217,13 +217,13 @@ consults the CRS to obtain a list of `ResearchDataUploadBox` IDs that the user m
   - Inspects auth context details to discern between Data Stewards and regular users
   - Communicates with the CRS to create or consult claims
   - Sends `ResearchDataUploadBox`-related requests to the UCS using self-signed WOTs
-  - The Data Steward role is required to create `FileUploadBoxes` and grant upload claims
+  - The Data Steward role is required to create `ResearchDataUploadBox` and grant upload access
   - Data Steward role is required for all `ResearchDataUploadBox` changes except `OPEN` -> `LOCKED`
   - Viewing `ResearchDataUploadBoxes` does not involve any WOTs, just the internal auth tokens
   - Endpoints are protected by requiring internal auth tokens
 - UCS:
   - Knows nothing about users, claims, studies, `ResearchDataUploadBoxes`, etc.
-  - Endpoints require protected by requiring WOTs that come from either the WPS or UOS
+  - Endpoints are protected by requiring WOTs that come from either the WPS or UOS
 
 For more information on the HTTP API, see the endpoint definitions below.
 
@@ -383,19 +383,19 @@ described above. In the case of a Data Steward, the UOS does not make the CRS ca
   - Path args and token must agree on box ID and file ID
 
 #### Upload Orchestration Service:
-- `GET /cases/{case_id}`: Retrieve a `ResearchDataUploadBox` by ID
-- `POST /cases`: Create a new `ResearchDataUploadBox`
+- `GET /boxes/{box_id}`: Retrieve a `ResearchDataUploadBox` by ID
+- `POST /boxes`: Create a new `ResearchDataUploadBox`
   - Requires Data Steward Role
   - Signs a `CreateFileUploadBoxWorkOrder` token and sends request to the UCS
   - Returns the ID of the newly created `ResearchDataUploadBox`
-- `PATCH /cases/{case_id}`: Update the state of a `ResearchDataUploadBox`
+- `PATCH /boxes/{box_id}`: Update the state of a `ResearchDataUploadBox`
   - Requires Data Steward Role *or* valid claim to the `ResearchDataUploadBox`
     - Only Data Stewards can do `LOCKED` -> `CLOSED` or `LOCKED` -> `OPEN`
     - Users are allowed to do `OPEN` -> `LOCKED`
   - Request body must include the properties to update. Empty body has no effect.
   - Signs an `ChangeFileUploadBoxWorkOrder` token and calls the matching UCS endpoint
     if the request involves toggling the `FileUploadBox`'s mutability
-- `POST /access`: Grant user access to a `FileUploadBox`
+- `POST /access-grant`: Grant user access to a `FileUploadBox`
   - Requires Data Steward Role
   - Instructs the CRS to create a new claim for the specified user
   - Request body must contain:
@@ -404,7 +404,7 @@ described above. In the case of a Data Steward, the UOS does not make the CRS ca
     - IVA ID
     - Any other pertinent information, such as access expiration date.
   - Browsing for and revoking claims can be done through the upcoming Claims Browser
-- `GET /cases/{case_id}/uploads`: Retrieve list of file IDs for `ResearchDataUploadBox`
+- `GET /boxes/{box_id}/uploads`: Retrieve list of file IDs for `ResearchDataUploadBox`
   - Signs a `ListFilesWorkOrder` token and calls matching UCS endpoint
 
 #### Work Package Service:
@@ -456,8 +456,8 @@ class ResearchDataUploadBox(FileUploadBox):
     """
 
     state: ResearchDataUploadBoxState  # one of OPEN, LOCKED, CLOSED
-    title: str  # short meaningful name for the case
-    description: str  # describes the upload case in more detail
+    title: str  # short meaningful name for the box
+    description: str  # describes the upload box in more detail
     last_changed: UTCDatetime
     changed_by: str  # ID of the user who performed the latest change
 
