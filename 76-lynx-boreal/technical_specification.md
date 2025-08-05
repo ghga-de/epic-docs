@@ -92,14 +92,16 @@ Also, the users can be provided with the richer information that is only availab
 How the UOS sits in relation to the UCS:  
 When there is a new study, a Data Steward logs on to the Data Portal and creates a new
 object, called a `ResearchDataUploadBox`, for uploading the research data. The Data Steward will
-enter at least a title and description so they can later identify the box. This info
-will flow from the Data Portal to the UOS, which will tell the UCS to create a corresponding `FileUploadBox`. The UOS will save the ID of the `FileUploadBox` with the
-other info in the `ResearchDataUploadBox`. Then the Data Steward will grant the
-relevant user an upload access claim tied to the `FileUploadBox` or
-`ResearchDataUploadBox` by calling the UOS, which in turn talks to the CRS.
+enter at least a title and description so they can later identify the box.
+The Data Portal will make a call to the UOS with the inputted information.
+The UOS will generate a new UUID for the `ResearchDataUploadBox` and then tell the UCS
+to create a corresponding `FileUploadBox` with the same ID. The UOS will return the
+ID to the Data Portal, and the Data Steward will subsequently grant the
+relevant user upload access to the `ResearchDataUploadBox` by calling the UOS,
+which in turn talks to the CRS.
 
 Each `ResearchDataUploadBox` has a random UUID, a title, a description, a state (`OPEN`,
-`LOCKED`, `CLOSED`), and the associated `FileUploadBox` from the UCS.
+`LOCKED`, `CLOSED`), and the associated `FileUploadBox` data from the UCS.
 Every change to a `ResearchDataUploadBox` triggers an outbox event, as well as a persistent
 event for auditing with the user ID, timestamp, and info about what action occurred.
 The UOS subscribes to `FileUploadBox` events in order to be informed when the file count or total size bytes of the upload box changes, but not `FileUpload` events.
@@ -357,6 +359,7 @@ described above. In the case of a Data Steward, the UOS does not make the CRS ca
 #### Upload Controller Service:
 - `POST /boxes`: Create a new `FileUploadBox`
   - Requires `CreateUploadWorkOrder` token and only allowed for Data Stewards via the UOS.
+  - Request body should contain the ID of the corresponding `ResearchDataUploadBox`.
   - Returns the `box_id` of the newly created `FileUploadBox`
 - `PATCH /boxes/{box_id}`: Update a `FileUploadBox` (to lock/unlock)
   - Requires `ChangeFileUploadBoxWorkOrder` token issued by UOS
@@ -383,6 +386,7 @@ described above. In the case of a Data Steward, the UOS does not make the CRS ca
   - Path args and token must agree on box ID and file ID
 
 #### Upload Orchestration Service:
+- `GET /boxes`: Retrieve all boxes allowed based on claims or user role
 - `GET /boxes/{box_id}`: Retrieve a `ResearchDataUploadBox` by ID
 - `POST /boxes`: Create a new `ResearchDataUploadBox`
   - Requires Data Steward Role
