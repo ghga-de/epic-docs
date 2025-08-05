@@ -45,8 +45,8 @@ file information and a way for other services to be aware of that file's existen
 Each `FileUploadBox` is labeled by a random UUID and has a boolean that determines
 whether any changes can be made to it or a given associated `FileUpload`, as well as
 fields for file count and total file size.
-Each `FileUpload` has a random UUID, an alias, a file size, a checksum, a state
-(`INIT` or `CLOSED`), and a field containing its parent `FileUploadBox` ID.
+Each `FileUpload` has a random UUID, an alias, a file size, a checksum, a bool
+indicating if upload is completed, and a field containing its parent `FileUploadBox` ID.
 There is a 1:many relationship between `FileUploadBox` and `FileUpload`.
 
 When there is a new study, a Data Steward triggers a new `FileUploadBox` via the UOS,
@@ -315,9 +315,9 @@ The following is accomplished using the `ghga-connector` for each file:
    - The Connector repeats this process for every file part until all parts are uploaded.
 2. The Connector makes a call to `PATCH /boxes/{box_id}/uploads/{file_id}` to
    inform the UCS that the file upload is complete. This request requires a
-   `UploadFileWorkOrder` token. The UCS sets the `FileUpload` with the matching ID to
-   `COMPLETE` and instructs S3 to complete the multipart upload. The Connector displays
-   a message to the user indicating that the file upload was successful.
+   `UploadFileWorkOrder` token. The UCS sets `complete=True` for the `FileUpload` with
+   the matching ID and instructs S3 to complete the multipart upload. The Connector
+   displays a message to the user indicating that the file upload was successful.
 
 ### `FileUpload` Deletion
 The user, via the `ghga-connector` with a valid WPAT, makes a request to the UCS's
@@ -338,7 +338,7 @@ request to the UOS, which checks with the CRS that the user may access this `Res
 As long as the user is authorized and the `ResearchDataUploadBox`'s current state is `OPEN`,
 the UOS signs a `ChangeFileUploadBoxWorkOrder` token and calls the UCS's
 `PATCH /boxes/{box_id}` endpoint. The UCS checks that there are no `FileUploades`
-for the `FileUploadBox` still in the `INIT` state. If all files are `COMPLETE`, the UCS
+for the `FileUploadBox` with `completed=False`. If all files are completed, the UCS
 changes the `FileUploadBox`'s mutability to `False`, emits a new outbox event for the
 upsertion, and sends a successful response to the UOS. The UOS updates the
 `ResearchDataUploadBox` state to `LOCKED`.
@@ -373,7 +373,7 @@ described above. In the case of a Data Steward, the UOS does not make the CRS ca
   - Path args and token must agree on box ID and file ID
 - `PATCH /boxes/{box_id}/uploads/{file_id}`: Conclude file upload in UCS
   - Requires `UploadFileWorkOrder` token of type "close" from WPS
-  - Sets the `FileUpload` status to `COMPLETE` and tells S3 to close the multipart upload.
+  - Sets the `FileUpload` to `completed=True` and tells S3 to close the multipart upload.
   - Path args and token must agree on box ID and file ID
 - `DELETE /boxes/{box_id}/uploads/{file_id}`: Remove a `FileUpload` from the `FileUploadBox`
   - Requires `UploadFileWorkOrder` token of type "delete" from WPS
@@ -431,6 +431,15 @@ class FileUploadBox(BaseModel):
   file_count: int  # The number of files in the box
   size: int  # The total size of all files in the box
 
+class FileUpload(BaseModel):
+    """A File Upload"""
+
+    upload_id: UUID4
+    completed: bool  # whether or not the file upload has finished
+    alias: str  # the submitted alias from the metadata (unique within the box)
+    checksum: str
+    size: int
+
 class ResearchDataUploadBoxState(StrEnum):
     """The allowed states for an ResearchDataUploadBox instance"""
 
@@ -449,21 +458,6 @@ class ResearchDataUploadBox(FileUploadBox):
     description: str  # describes the upload case in more detail
     last_changed: UTCDatetime
     changed_by: str  # ID of the user who performed the latest change
-
-class FileUploadState(StrEnum):
-    """The allowed states for a FileUpload instance"""
-
-    INIT = "init"
-    COMPLETE = "complete"
-
-class FileUpload(BaseModel):
-    """A File Upload"""
-
-    upload_id: UUID4
-    state: FileUploadState  # one of INIT, COMPLETE
-    alias: str  # the submitted alias from the metadata (unique within the box)
-    checksum: str
-    size: int
 
 class AuditRecord(BaseModel):
   """A generic record for audit purposes"""
