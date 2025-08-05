@@ -198,8 +198,8 @@ each file part.
   have either a valid claim for the `ResearchDataUploadBox` or have the Data Steward role.
 - Changing the state of a `ResearchDataUploadBox` otherwise requires the Data Steward role.
 - When a `ResearchDataUploadBox` is set to `LOCKED` or `CLOSED`, the UOS signs a
-  `ChangeFileUploadBoxWorkOrder` and tells the UCS to make the associated `FileUploadBox`
-  immutable.
+  `ChangeFileUploadBoxWorkOrder` of type "lock" and tells the UCS to make the
+  associated `FileUploadBox` immutable.
 - Claims and work packages for closed `ResearchDataUploadBoxes` remain valid in the CRS 
   - The UCS and UOS are responsible for screening requests based on the state of a given
     `ResearchDataUploadBox`, `FileUploadBox`, or `FileUpload`, as applicable.
@@ -500,7 +500,7 @@ CreateFileUploadBoxWorkOrder:
   name: str
 
 ChangeFileUploadBoxWorkOrder:
-   type: "lock" | "close" | "open"
+   type: "lock" | "unlock"
    box_id: str
 
 ListFilesWorkOrder:
