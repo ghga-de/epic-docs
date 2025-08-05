@@ -112,11 +112,17 @@ specific action. This epic introduces changes and augmentations to GHGA's WOTs, 
 can find more information in the **Auth** section below.
 
 ### Work Package Service
-The WPS is hardcoded to set up an error when creating a work package if the work type
+The WPS is hardcoded to raise an error when creating a work package if the work type
 is anything other than "download". The logic is all download-centric, so the WPS needs
 to be updated to accommodate "upload" work packages. To this end, these are the main
 points to address:
 1. Update `WorkPackageRepository` logic to handle CRUD-ing "upload" work packages
+   - Add `get_upload_box()` and `get_upload_boxes` functions that mirror
+      `get_dataset()` and `get_datasets()`
+   - Add `register_upload_box()` to store boxes as events are received
+   - Update `get()` to return upload-type work packages
+   - Update `create()` to enable creating upload-type work packages
+   - Add a `box_dao` (name is an implementation detail) to the repository
 2. Revamp Work Order Tokens (see Additional Implementation Details)
 3. Listen for outbox events carrying `ResearchDataUploadBox` data, and store the box
    IDs and titles.
@@ -126,8 +132,12 @@ points to address:
 6. Provide a way to distribute WOTs, either by modifying the
    `/work-packages/{work_package_id}/files/{file_id}/work-order-tokens` endpoint or
    replacing it with one or more endpoints that allow passing the type and
-   additional token content
-
+   additional token content'
+7. Provide an endpoint to return the list of existing boxes for a user.
+8. Restructure existing work package models to accommodate upload-type work packages
+   - How this is accomplished is not important for this epic
+9. Decide if upload and download work packages will share the same collection
+9. Define a database migration for the existing work package data if needed
 
 ### Claims Repository
 1. Extend the access API (not the claims API, which is not active at the moment) to also
