@@ -56,7 +56,8 @@ view, see the **User Journeys** for more detailed information.
 
 Both `FileUploadBox` and `FileUpload` changes are emitted as outbox events, but the
 UCS does not consume any events or store any other data. `FileUploadBox` events are
-consumed by the UOS while the `FileUploades` are consumed by other file services.
+consumed by the UOS in oder to update the file count and total size of the corresponding
+`ResearchDataUploadBoxes`, while the `FileUploades` are consumed by other file services.
 
 The UCS has a REST API, but requests only come from two places: `ghga-connector` and the
 UOS. All endpoints are secured by Work Order Tokens (WOTs) signed by either the UOS (see
