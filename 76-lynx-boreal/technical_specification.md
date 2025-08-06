@@ -78,7 +78,7 @@ upload path, and it does not perform any of the S3 operations found in the UCS.
 The UOS maintains richer information about each ongoing research data upload effort and
 produces audit records on who changes that information and when.
 While the UCS is tasked with facilitating the actual upload processes, the UOS stores an
-enriched version of the `FileUploadBox`, called a `ResearchDataUploadBox`. It also
+enriched wrapper around the `FileUploadBox` concept, called a `ResearchDataUploadBox`. It also
 talks to the Claims Repository Service to control access to the `ResearchDataUploadBox`.
 Users/Data Stewards can access the UOS through the Data Portal, and requests are
 routed through the auth adapter so the UOS can inspect user IDs and roles.
