@@ -49,12 +49,9 @@ Each `FileUpload` has a random UUID, an alias, a file size, a checksum, a bool
 indicating if upload is completed, and a field containing its parent `FileUploadBox` ID.
 There is a 1:many relationship between `FileUploadBox` and `FileUpload`.
 
-When there is a new study, a Data Steward creates a new `FileUploadBox`. Then the user can
-create a work package for the new `FileUploadBox` and use the `ghga-connector` to uploa
- the files for their study. That's the simplified mountaintop view. In reality, users and
-Data Stewards operate the UCS and the `FileUploadBox` indirectly via a service in the core
-domain called UOS, and a corresponding domain object called `ResearchDataUploadBox`.
-See the description of the UOS and the **User Journeys** for more detailed information.
+When a user shall be enabled to upload Research Data to GHGA, a Data Steward creates a new `ResearchDataUploadBox` which internally maps to the creation of a `FileUploadBox`. Then the
+user can create a work package for the new `FileUploadBox` and use the `ghga-connector` to upload
+ Research Data. See the description of the UOS and the **User Journeys** for more detailed information.
 
 Both `FileUploadBox` and `FileUpload` changes are emitted as outbox events, but the
 UCS does not consume any events or store any other data. `FileUploadBox` events are
