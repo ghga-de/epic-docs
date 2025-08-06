@@ -90,8 +90,8 @@ users should only be able to see a `ResearchDataUploadBox` if they actually have
 Also, the users can be provided with the richer information that is only available in the  `ResearchDataUploadBox`.
 
 How the UOS sits in relation to the UCS:  
-When there is a new study, a Data Steward logs on to the Data Portal and creates a new
-object, called a `ResearchDataUploadBox`, for uploading the research data. The Data Steward will
+When a Data Steward intends to enable a Research Data upload, they log on to the Data Portal and 
+create a new object, called a `ResearchDataUploadBox`. The Data Steward will
 enter at least a title and description so they can later identify the box.
 The Data Portal will make a call to the UOS with the inputted information.
 The UOS will generate a new UUID for the `ResearchDataUploadBox` and then tell the UCS
