@@ -30,14 +30,14 @@ epic.
 ### Upload Controller Service (UCS)
 
 The UCS is responsible for two things:
-1. Cataloging individual files for a given study without knowing
+1. Cataloging individual files for a given file bundle without knowing
 anything about studies or other business concepts.
 2. Facilitating the actual upload of said files by:
    - Opening a new multipart S3 upload
    - Dispensing pre-signed part upload URLs
    - Completing/cancelling the S3 upload
 
-In the UCS, a study is represented by a minimalistic abstraction called a
+In the UCS, a file bundle is represented by a minimalistic abstraction called a
 `FileUploadBox`, and a file is represented as a `FileUpload`. The former offers a way to
 group file uploads, lock them for changes and check the uniqueness of the included file aliases. The latter offers specific
 file information and a way for other services to be aware of that file's existence.
