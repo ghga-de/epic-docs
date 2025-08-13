@@ -479,6 +479,8 @@ class AuditRecord(BaseModel):
   service: str
   label: str
   description: str
+  user_id: UUID4 | None = None
+  correlation_id: UUID4
   action: Literal["C", "R", "U", "D"] | None = None
   entity: str | None = None
   entity_id: str | None = None
