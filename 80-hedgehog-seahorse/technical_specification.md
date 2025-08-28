@@ -35,7 +35,7 @@ The existing functionality for the upload is outdated and needs to be replaced w
 
 This means
 
-- Refactor/rewrite the WorkPackageAccesor to support tokens for the upload path.
+- Refactor/rewrite the WorkPackageAccessor to support tokens for the upload path.
 - Rewriting the async task based file download code to also support uploads reusing the same general mechanism. Currently the code is ignorant about the actual function passed in for execution, but there's some coupling to the download around the `TaskHandler` that would make this cumbersome to reuse.
 - The inplace encryption code present in the current, unused upload code path is a variant of an earlier implementation in the DS-Kit and can be recycled for the current vision of the upload process.
 - Enable upload functionality analogous to what is implemented for the download, i.e. parallelized part upload using work package/work order tokens.
