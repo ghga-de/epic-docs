@@ -70,7 +70,7 @@ This epic covers the following user journeys:
 - Most of the issues making this a hard codebase to work with can be traced down to passing an instance of the `WorkPackageAccessor`, `httpx.AsyncClient` and `MessageDisplay` down the call stack and inconsistencies in who is responsible for calling functions on those instance objects.
 - Use dependency injection for the initial configuration that does not need remote calls, i.e. init and/or inject MessageDisplay and the http client.
 - As the Downloader is dependent on the current file_id, the builder pattern could be used to inject a base instance that is then fully specialized by providing the ID
-- Donwload handling should have a central point that gets all other functionality injected and is responsible for managing and handling.
+- Download handling should have a central point that gets all other functionality injected and is responsible for managing and handling.
 - The CLI layer should be thin and delegate more complex functionality to the core.
 
 In the current implementation, the different concerns that are involved in the download process are entangled in the following way:
