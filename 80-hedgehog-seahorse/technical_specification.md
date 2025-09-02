@@ -60,8 +60,27 @@ The repository template based system curren-tly tends to needlessly break stuff 
 
 ## User Journeys:
 
-This epic covers the following user journeys:
+The journeys for the download path stay the same, only the underlying implementation changes.
 
+The user journeys for the new upload path are based on the description provided in [Lynx Boreal](../76-lynx-boreal/technical_specification.md):
+
+1. The user initiates the upload process for one or multiple files, providing a Work `PackageAccessToken` of type upload and their GHGA keypair.
+If multiple files are provided, those are processed in sequence.
+For each file, the following happens:
+
+   1. The Connector contacts the WPS and exchanges the WPAT for a CreateFileWorkOrder token.
+   2. The Connector calls the UCS's POST /boxes/{box_id}/uploads/ endpoint. The request body includes the unencrypted checksum, the file alias, and possibly further information. The WOT carries the box ID and file alias.
+   3. The UCS ensures the FileUploadBox is currently open and doesn't already have a completed FileUpload for the same file alias.
+   4. The UCS initiates a multipart upload for the file and returns an HTTP response to the Connector indicating that the file upload was successfully initiated.
+   The response contains the UCS-generated file id (UUID4) of the new file upload.
+   5. The file is read in chunks, which are  encrpyted using the users private key and the GHGA public key, and assembled into file parts for the multipart upload
+   6. A GET request to the UCS to obtain a file part upload URL. This call is repeated for each file part and, in contrast to the download path, the result cannot be cached, as each URL is specific for the part being uploaded. Consequently a timeout between subsequent calls is employed to distribute calls more evenly. Interaction with this endpoint requires an `UploadFileWorkOrder` token of type "upload" from the WPS. The user supplies the file_id to get the above token. The token is only valid for a file with the matching file_id, while the URL returend from the UCS is only valid for the given file upload and file part number.
+   7. Once all parts are uploaded, a final PATCH request to the UCS to complete the file upload is issued, using a `UploadFileWorkOrder` token of type "close".
+
+2. (Optional) The user initiates the deletion of an already uploaded file or a file for which a currently opened multipart upload exists providing the `WorkPackageAccessToken` and the file id
+   1. The connector obtains a `UploadFileWorkOrder` token of type "delete" from the WPS
+   2. The connector performs a DELETE request to the corresponding UCS endpoint, which then either deletes the file, if the upload has already been completed, or cancels the ongoing multipart upload, deleting all file parts which have been submitted so far.
+   3. A response is returned from the UCS, informing about the successful deletion
 
 
 ## Additional Implementation Details:
@@ -144,7 +163,7 @@ classDiagram
         stage_files()
     }
     TransferHandler ..> Downloader: inject presigned_url_api_call
-    TransferHandler ..> WorkPackageAccessor: _work_order_token_api_call
+    TransferHandler ..> WorkPackageAccessor: inject _work_order_token_api_call
     TransferHandler ..> FileStager: inject _list_files_in_bucket_api_call
     DownloaderBase --|> Downloader
     WorkPackageAccessorBase --|> WorkPackageAccessor
