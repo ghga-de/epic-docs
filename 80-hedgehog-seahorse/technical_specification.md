@@ -61,24 +61,25 @@ The repository template based system curren-tly tends to needlessly break stuff 
 ## User Journeys:
 
 This epic covers the following user journeys:
-<TODO upload journey description, waiting on the final details of lynx boreal>
+
+
 
 ## Additional Implementation Details:
+
+### General issues
+
+- URLs with a hardcoded part are defined inplace across different modules
+- Using the RetryHandler causes code duplication in the calling code when dealing with exception sources
 
 ### Download
 
 - Most of the issues making this a hard codebase to work with can be traced down to passing an instance of the `WorkPackageAccessor`, `httpx.AsyncClient` and `MessageDisplay` down the call stack and inconsistencies in who is responsible for calling functions on those instance objects.
 - Use dependency injection for the initial configuration that does not need remote calls, i.e. init and/or inject MessageDisplay and the http client.
-- As the Downloader is dependent on the current file_id, the builder pattern could be used to inject a base instance that is then fully specialized by providing the ID
+- As the Downloader is dependent on the current file_id, something like the builder pattern could be used to inject a base instance that is then fully specialized by providing the ID
 - Download handling should have a central point that gets all other functionality injected and is responsible for managing and handling.
 - The CLI layer should be thin and delegate more complex functionality to the core.
 
 In the current implementation, the different concerns that are involved in the download process are entangled in the following way:
-
-#### General issues
-
-- URLs with a hardcoded part are defined inplace across different modules
-- Using the RetryHandler causes code duplication in the calling code when dealing with exception sources
 
 #### `cli.py`:
 
@@ -104,7 +105,59 @@ In the current implementation, the different concerns that are involved in the d
 A better approach to properly separate the concerns could be achieved this way:
 
 The trinity of `Downloader`, `WorkPackageAccessor` and `FileStager` are replaced by a central class that exposes the necessary API calls and delegates the responsibilities, flattening the call stack hierarchy.
-The idea is to inject not yet finalized instances of classes that deal with specialized parts of the download lifecycle and inject the functionality that deals with API calls builder pattern style.
+The idea is to inject not yet finalized instances of classes that deal with specialized parts of the download lifecycle into the `TransferHandler` and inject the functionality that deals with API calls from the `TransferHandler` into the respective classes.
+
+Here's a basic example of how this could look like based on the currently existing classes, omitting most of the details. `TransferHandler` is the central class managing everything and provides the functionality for API calls:
+
+```mermaid
+classDiagram
+    class TransferHandler{
+        client: httpx.AsyncClient
+        downloader: DownloaderBase
+        wpa: WorkPackageAccessorBase
+        file_stager: FileStagerBase
+        work_order_token_api_call()
+        list_files_in_bucket_api_call()
+        presigned_url_api_call()
+        ... ()
+    }
+    class DownloaderBase{
+        @abstract download_file()
+    }
+    class Downloader{
+        _file_id: str
+        _presigned_url_api_call: Callable
+        download_file()
+    }
+    class WorkPackageAccessorBase{
+        @abstract get_work_order_token()
+    }
+    class WorkPackageAccessor{
+        _work_order_token_api_call: Callable
+        get_work_order_token()
+    }
+    class FileStagerBase{
+        @abstract stage_files()
+    }
+    class FileStager{
+        _list_files_in_bucket_api_call: Callable
+        stage_files()
+    }
+    TransferHandler ..> Downloader: inject presigned_url_api_call
+    TransferHandler ..> WorkPackageAccessor: _work_order_token_api_call
+    TransferHandler ..> FileStager: inject _list_files_in_bucket_api_call
+    DownloaderBase --|> Downloader
+    WorkPackageAccessorBase --|> WorkPackageAccessor
+    FileStagerBase --|> FileStager
+```
+
+The other classes have a base variant that represents the not yet fully initialized state which will be finalized by the `TransferHandler`, e.g. `DownloaderBase` is initialized with all information needed that is available statically, i.e. from config, injected into the `TransferHandler` and a fully initialized `Downloader` instance is built on demand from the base class by injecting the missing `file_id` and methods performing API calls. 
+The finalization could then happen like this `downloader_base.with_file_id(file_id).with_presigned_url_call(presigned_url_api_call).complete() -> Downloader` or, depending on the situation, directly in the constructor of the `TransferHandler`. 
+Those instances are then used by the `TransferHandler` to achieve the required functionality.
+
+### Upload
+
+As similar structure as described for the download could also be adopted for the upload process, as there will be similar components governing the lifecycle of file uploads.
 
 ## Human Resource/Time Estimation:
 
