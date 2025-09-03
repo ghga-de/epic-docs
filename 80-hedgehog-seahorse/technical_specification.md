@@ -80,7 +80,7 @@ For each file, the following happens:
 2. (Optional) The user initiates the deletion of an already uploaded file or a file for which a currently opened multipart upload exists providing the `WorkPackageAccessToken` and the file id
    1. The connector obtains a `UploadFileWorkOrder` token of type "delete" from the WPS
    2. The connector performs a DELETE request to the corresponding UCS endpoint, which then either deletes the file, if the upload has already been completed, or cancels the ongoing multipart upload, deleting all file parts which have been submitted so far.
-   3. A response is returned from the UCS, informing about the successful deletion
+   3. The UCS returns a response communicating that the deletion was successful.
 
 
 ## Additional Implementation Details:
