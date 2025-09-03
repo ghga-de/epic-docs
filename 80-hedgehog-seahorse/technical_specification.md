@@ -126,7 +126,7 @@ A better approach to properly separate the concerns could be achieved this way:
 The trinity of `Downloader`, `WorkPackageAccessor` and `FileStager` are replaced by a central class that exposes the necessary API calls and delegates the responsibilities, flattening the call stack hierarchy.
 The idea is to inject not yet finalized instances of classes that deal with specialized parts of the download lifecycle into the `TransferHandler` and inject the functionality that deals with API calls from the `TransferHandler` into the respective classes.
 
-Here's a basic example of how this could look like based on the currently existing classes, omitting most of the details. `TransferHandler` is the central class managing everything and provides the functionality for API calls:
+Here's a basic example of what this could look like based on the existing classes, omitting most of the details. `TransferHandler` is the central class managing everything and provides the functionality for API calls:
 
 ```mermaid
 classDiagram
