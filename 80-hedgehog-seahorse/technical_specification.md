@@ -75,7 +75,7 @@ For each file, the following happens:
    The response contains the UCS-generated file id (UUID4) of the new file upload.
    5. The file is read in chunks, which are  encrpyted using the users private key and the GHGA public key, and assembled into file parts for the multipart upload
    6. The Connector makes a GET request to the UCS to obtain a file part upload URL. This call is repeated for each file part and, in contrast to the download path, the result cannot be cached, as each URL is specific to the part being uploaded. Files can have thousands of file parts, so the Connector will self-impose rate limits to this UCS endpoint via a small delay between calls. Interaction with this endpoint requires an `UploadFileWorkOrder` token of type "upload" from the WPS. The user supplies the file_id to get the above token. The token is only valid for a file with the matching file_id.
-   7. Once all parts are uploaded, a final PATCH request to the UCS to complete the file upload is issued, using a `UploadFileWorkOrder` token of type "close".
+   7. Once all parts are uploaded, the Connector makes a final request to the UCS endpoint `PATCH /boxes/{box_id}/uploads/{file_id}` to conclude the upload. This requires first obtaining an `UploadFileWorkOrder` token of type "close" from the WPS.
 
 2. (Optional) The user initiates the deletion of an already uploaded file or a file for which a currently opened multipart upload exists providing the `WorkPackageAccessToken` and the file id
    1. The connector obtains a `UploadFileWorkOrder` token of type "delete" from the WPS
