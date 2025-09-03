@@ -64,7 +64,7 @@ The journeys for the download path stay the same, only the underlying implementa
 
 The user journeys for the new upload path are based on the description provided in [Lynx Boreal](../76-lynx-boreal/technical_specification.md):
 
-1. The user initiates the upload process for one or multiple files, providing a Work `PackageAccessToken` of type upload and their GHGA keypair.
+1. The user initiates the upload process for one or multiple files, providing a `WorkPackageAccessToken` of type upload and their GHGA keypair.
 If multiple files are provided, those are processed in sequence.
 For each file, the following happens:
 
