@@ -56,7 +56,7 @@ user can create a work package for the new `FileUploadBox` and use the `ghga-con
 Both `FileUploadBox` and `FileUpload` changes are emitted as outbox events, but the
 UCS does not consume any events or store any other data. `FileUploadBox` events are
 consumed by the UOS in oder to update the file count and total size of the corresponding
-`ResearchDataUploadBoxes`, while the `FileUploades` are consumed by other file services.
+`ResearchDataUploadBoxes`, while the `FileUploads` are consumed by other file services.
 
 The UCS has a REST API, but requests only come from two places: `ghga-connector` and the
 UOS. All endpoints are secured by Work Order Tokens (WOTs) signed by either the UOS (see
@@ -92,8 +92,7 @@ create a new object, called a `ResearchDataUploadBox`. The Data Steward will
 enter at least a title and description so they can later identify the box.
 The Data Portal will make a call to the UOS with the inputted information.
 The UOS will generate a new UUID for the `ResearchDataUploadBox` and then tell the UCS
-to create a corresponding `FileUploadBox` with the same ID. The UOS will return the
-ID to the Data Portal, and the Data Steward will subsequently grant the
+to create a corresponding `FileUploadBox`, which receives its own ID. The UOS will return the ID of the `ResearchDataUploadBox` to the Data Portal, and the Data Steward will subsequently grant the
 relevant user upload access to the `ResearchDataUploadBox` by calling the UOS,
 which in turn talks to the CRS.
 
@@ -366,7 +365,7 @@ described above. In the case of a Data Steward, the UOS does not make the CRS ca
 #### Upload Controller Service:
 - `POST /boxes`: Create a new `FileUploadBox`
   - Requires `CreateUploadWorkOrder` token and only allowed for Data Stewards via the UOS.
-  - Request body should contain the ID of the corresponding `ResearchDataUploadBox`.
+  - Request body should contain the S3 storage alias to use for uploads tied to the box
   - Returns the `box_id` of the newly created `FileUploadBox`
 - `PATCH /boxes/{box_id}`: Update a `FileUploadBox` (to lock/unlock)
   - Requires `ChangeFileBoxWorkOrder` token issued by UOS
@@ -439,10 +438,11 @@ described above. In the case of a Data Steward, the UOS does not make the CRS ca
 class FileUploadBox(BaseModel):
   """A class representing a box that bundles files belonging to the same upload"""
 
-  box_id: UUID4  # unique identifier for the instance
+  id: UUID4  # unique identifier for the instance
   locked: bool = False  # Whether or not changes to the files in the box are allowed
   file_count: int = 0 # The number of files in the box
   size: int = 0 # The total size of all files in the box
+  storage_alias: str
 
 class FileUpload(BaseModel):
     """A File Upload"""
@@ -450,7 +450,7 @@ class FileUpload(BaseModel):
     upload_id: UUID4
     completed: bool = False # whether or not the file upload has finished
     alias: str  # the submitted alias from the metadata (unique within the box)
-    checksum: str
+    checksum: str # Unencrypted checksum
     size: int
 
 class ResearchDataUploadBoxState(StrEnum):
@@ -460,17 +460,19 @@ class ResearchDataUploadBoxState(StrEnum):
     LOCKED = "locked"
     CLOSED = "closed"
 
-class ResearchDataUploadBox(FileUploadBox):
+class ResearchDataUploadBox(BaseModel):
     """A class representing a ResearchDataUploadBox.
     
-    Contains all fields from the FileUploadBox and shares IDs.
+    Contains all fields from the FileUploadBox.
     """
 
+    id: UUID4
     state: ResearchDataUploadBoxState  # one of OPEN, LOCKED, CLOSED
     title: str  # short meaningful name for the box
     description: str  # describes the upload box in more detail
     last_changed: UTCDatetime
     changed_by: str  # ID of the user who performed the latest change
+    file_upload_box: FileUploadBox
 
 class AuditRecord(BaseModel):
   """A generic record for audit purposes"""
