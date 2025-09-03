@@ -87,7 +87,7 @@ For each file, the following happens:
 
 ### General issues
 
-- URLs with a hardcoded part are defined inplace across different modules
+- URLs with hardcoded fragments are used across different modules
 - Using the RetryHandler causes code duplication in the calling code when dealing with exception sources
 
 ### Download
