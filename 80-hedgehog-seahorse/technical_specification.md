@@ -123,56 +123,11 @@ In the current implementation, the different concerns that are involved in the d
 
 A better approach to properly separate the concerns could be achieved this way:
 
-The trinity of `Downloader`, `WorkPackageAccessor` and `FileStager` are replaced by a central class that exposes the necessary API calls and delegates the responsibilities, flattening the call stack hierarchy.
-The idea is to inject not yet finalized instances of classes that deal with specialized parts of the download lifecycle into the `TransferHandler` and inject the functionality that deals with API calls from the `TransferHandler` into the respective classes.
-
-Here's a basic example of what this could look like based on the existing classes, omitting most of the details. `TransferHandler` is the central class managing everything and provides the functionality for API calls:
-
-```mermaid
-classDiagram
-    class TransferHandler{
-        client: httpx.AsyncClient
-        downloader: DownloaderBase
-        wpa: WorkPackageAccessorBase
-        file_stager: FileStagerBase
-        work_order_token_api_call()
-        list_files_in_bucket_api_call()
-        presigned_url_api_call()
-        ... ()
-    }
-    class DownloaderBase{
-        @abstract download_file()
-    }
-    class Downloader{
-        _file_id: str
-        _presigned_url_api_call: Callable
-        download_file()
-    }
-    class WorkPackageAccessorBase{
-        @abstract get_work_order_token()
-    }
-    class WorkPackageAccessor{
-        _work_order_token_api_call: Callable
-        get_work_order_token()
-    }
-    class FileStagerBase{
-        @abstract stage_files()
-    }
-    class FileStager{
-        _list_files_in_bucket_api_call: Callable
-        stage_files()
-    }
-    TransferHandler ..> Downloader: inject presigned_url_api_call
-    TransferHandler ..> WorkPackageAccessor: inject _work_order_token_api_call
-    TransferHandler ..> FileStager: inject _list_files_in_bucket_api_call
-    DownloaderBase --|> Downloader
-    WorkPackageAccessorBase --|> WorkPackageAccessor
-    FileStagerBase --|> FileStager
-```
-
-The other classes have a base variant that represents the not yet fully initialized state which will be finalized by the `TransferHandler`, e.g. `DownloaderBase` is initialized with all information needed that is available statically, i.e. from config, injected into the `TransferHandler` and a fully initialized `Downloader` instance is built on demand from the base class by injecting the missing `file_id` and methods performing API calls. 
-The finalization could then happen like this `downloader_base.with_file_id(file_id).with_presigned_url_call(presigned_url_api_call).complete() -> Downloader` or, depending on the situation, directly in the constructor of the `TransferHandler`. 
-Those instances are then used by the `TransferHandler` to achieve the required functionality.
+The trinity of `Downloader`, `WorkPackageAccessor` and `FileStager` are replaced by a central `TransferHandler` class that exposes the necessary API calls and delegates the responsibilities, flattening the call stack hierarchy.
+Classes that deal with specialized parts of the download lifecycle can be instantiated on demand by a factory attached to the `TransferHandler`, which injects the functions to perform the necessary API calls from the `TransferHandler`.
+Centralizing all API calling functionality that is currently spread across different parts of the codebase should allow for easier exensibility in the future.
+If the necessary care is taken, adding new functionality would mean adding a new class to the factory and new methods for the needed API call to the `TransferHandler`.
+This would replace the current, tedious process of tracing different, interdependent parts of the codebase along levels of a hierarchical call stack.
 
 ### Upload
 
