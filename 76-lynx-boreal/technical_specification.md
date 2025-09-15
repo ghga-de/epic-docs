@@ -237,7 +237,11 @@ For more information on the HTTP API, see the endpoint definitions below.
 
 ## User Journeys
 
+
+
 ### `ResearchDataUploadBox` Creation
+
+![Create Research Data Upload Box](./images/create_rdub.png)
 A Data Steward uses the Data Portal to create a new `ResearchDataUploadBox`. The Data Portal
 makes a `POST` call to the UOS, which verifies the Data Steward's access and subsequently
 makes a call to the UCS to create a new `FileUploadBox`. The UCS returns the `FileUploadBox`
@@ -257,6 +261,8 @@ Data Steward can then inform the user that they make proceed with work package c
 and file upload.
 
 ### `ResearchDataUploadBox` Retrieval
+![Retrieve Research Data Upload Box](./images/retrieve_boxes.png)
+
 In the case of a Data Steward:  
 1. A Data Steward uses the Data Portal to make a `GET` request to the UOS.
 2. The UOS sees that the request comes from a user with the Data Steward role and
@@ -273,6 +279,8 @@ In the case of a non-Data Steward:
 ### `ResearchDataUploadBox` Info Update
 > Requires that the user journey "`ResearchDataUploadBox` Creation" has been completed.
 
+![Update Research Data Upload Box](./images/update_rdub.png)
+
 The Data Steward calls the `PATCH /boxes/{box_id}` endpoint on the UOS API
 from a page on the Data Portal. The request body should contain the updated 
 `ResearchDataUploadBox` or, alternatively, indicate which fields to change and how. This could
@@ -286,6 +294,8 @@ as well as the timestamp.
 ### Work Package Creation
 > The user journey "`ResearchDataUploadBox` Creation` must have been completed.
 
+![Create Work Package](./images/create_work_package.png)
+
 The user uses the Data Portal to see which `ResearchDataUploadBoxes` they have access to, then
 creates a work package for the new `ResearchDataUploadBox`. The WPS validates the request,
 creates the work package, and returns the Work Package Access Token (WPAT) to the user.
@@ -293,6 +303,8 @@ The user can then use this WPAT with the `ghga-connector` to upload files.
 
 ### File Upload Init
 > Requires that the user journey "Work Package Creation" has been completed.
+
+![File Upload Init](./images/initiate_file_upload.png)
 
 The following is accomplished using the `ghga-connector` and the WPAT:
 
@@ -313,6 +325,8 @@ information. The WOT carries the box ID and file alias.
 ### File Upload
 > Requires that the user journey "File Upload Init" has been completed.
 
+![File Upload](./images/upload_a_file.png)
+
 The following is accomplished using the `ghga-connector` for each file:
 
 1. The Connector uploads the file in chunks:
@@ -330,6 +344,9 @@ The following is accomplished using the `ghga-connector` for each file:
    displays a message to the user indicating that the file upload was successful.
 
 ### `FileUpload` Deletion
+
+![Delete a File Upload](./images/delete_file_upload.png)
+
 The user, via the `ghga-connector` with a valid WPAT, makes a request to the UCS's
 `DELETE /boxes/{box_id}/uploads/{file_id}` endpoint, indicating they wish to
 delete a file from the associated `FileUploadBox`. If a valid `UploadFileWorkOrder` token
@@ -342,6 +359,8 @@ Finally, the UCS returns an HTTP response to the user indicating the deletion wa
 
 ### `ResearchDataUploadBox` State Change
 > Requires that the user journey "File Upload" has been completed.
+
+![Update a Research Data Upload Box](./images/update_rdub.png)
 
 The user uses the Data Portal to *LOCK* the `ResearchDataUploadBox`. The Data Portal sends this
 request to the UOS, which checks with the CRS that the user may access this `ResearchDataUploadBox`.
@@ -357,6 +376,35 @@ Users are only allowed to make the initial change from `OPEN` to `LOCKED`. Only 
 Stewards may move an `ResearchDataUploadBox` from `LOCKED` to `CLOSED`, `LOCKED` to `OPEN`, or
 from `CLOSED` to `OPEN`. These other state changes follow a similar path to the one
 described above. In the case of a Data Steward, the UOS does not make the CRS call.
+
+
+### List File Uploads for a Box
+> Requires that the user journey "`ResearchDataUploadBox` Creation" has been completed.
+
+![List File Uploads](./images/list_file_uploads.png)
+
+The user uses the Data Portal to request a list of completed files associated with a given ResearchDataUploadBox. The Data Portal makes a request to the UOS. The UOS makes a request to the CRS in order to verify the user's access. If the user is not authorized to access the box, they will see a 403 error. If the user is authorized to see the box, however, then the UOS signs a `ViewFileBoxWorkOrder` token and calls the UCS's `GET /boxes/{box_id}/uploads` endpoint. The UCS compiles a list of **completed** file uploads and returns their IDs. The UOS then returns this list to the Data Portal.
+
+### Grant File Upload Access
+> Requires that the user journey "`ResearchDataUploadBox` Creation" has been completed.
+
+![Grant Upload Access](./images/granting_upload_access.png)
+
+A Data Steward uses the Data Portal to make a request to grant upload access to a user for a given research data upload box ID. The Data Portal sends a request to the UOS, which verifies that the Data Steward has the requisite role. Then, the UOS verifies that the box exists. If the box exists, the UOS makes a call to the CRS's `POST /upload-access/users/{user_id}/ivas/{iva_id}/boxes/{box_id}` endpoint to create a new upload claim with the given information. If this operation is successful, the CRS returns a 201 response and the UOS creates an AuditRecord in its database and emits it as a Kafka event.
+
+### Revoking Upload Access
+> Requires that the user journey "Grant File Upload Access" has been completed.
+
+![Revoke Upload Access](./images/revoke_upload_access.png)
+
+A Data Steward uses the Data Portal to make a request to revoke a given upload access grant by ID. The Data Portal sends a request to the UOS, which verifies that the Data Steward has the requisite role. UOS makes a call to the CRS's `DELETE /upload-access/grants/{grant_id}` endpoint to delete the claim if it exists.
+
+### List Upload Access Grants
+> Requires that the user journey "Grant File Upload Access" has been completed.
+
+![List Upload Access](./images/list_upload_access.png)
+
+A Data Steward uses the Data Portal to make a request to revoke a given upload access grant by ID. The Data Portal sends a request to the UOS, which verifies that the Data Steward has the requisite role. The UOS makes a call to the CRS's `GET /upload-access/grants` endpoint, including any search filters provided by the DS as query parameters. The CRS returns a compiled list of grants to the UOS, which returns the information to the Data Portal.
 
 ## API Definitions:
 
@@ -426,11 +474,12 @@ described above. In the case of a Data Steward, the UOS does not make the CRS ca
 
 #### Claims Repository Service:
 - CRS Authentication for upload endpoints should match existing download counterparts
+- `GET /upload-access/grants`: lists existing upload access grants
 - `GET /upload-access/users/{user_id}/boxes`: lists which `FileUploadBoxes` a user can access
 - `GET /upload-access/users/{user_id}/boxes/{box_id}`: check if a user has access to a certain upload box
 - `POST /upload-access/users/{user_id}/ivas/{iva_id}/boxes/{box_id}`: grant upload access
   - This is called by the UOS when the Data Steward grants a user upload access
-- `DELETE /upload-access/users/{user_id}/boxes/{box_id}`: revoke upload access
+- `DELETE /upload-access/grants/{grant_id}`: revoke upload access
 
 ### Payload Schemas for Events:
 
