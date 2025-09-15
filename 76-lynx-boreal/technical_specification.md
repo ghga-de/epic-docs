@@ -446,37 +446,49 @@ A Data Steward uses the Data Portal to make a request to revoke a given upload a
   - Requires Data Steward Role
   - Signs a `CreateFileBoxWorkOrder` token and sends request to the UCS
   - Returns the ID of the newly created `ResearchDataUploadBox`
-- `PATCH /boxes/{box_id}`: Update the state of a `ResearchDataUploadBox`
+- `PATCH /boxes/{box_id}`: Update a `ResearchDataUploadBox`'s state, title, or description
   - Requires Data Steward Role *or* valid claim to the `ResearchDataUploadBox`
     - Only Data Stewards can do `LOCKED` -> `CLOSED` or `LOCKED` -> `OPEN`
     - Users are allowed to do `OPEN` -> `LOCKED`
   - Request body must include the properties to update. Empty body has no effect.
-  - Signs an `ChangeFileBoxWorkOrder` token and calls the matching UCS endpoint
+  - Signs a `ChangeFileBoxWorkOrder` token and calls the matching UCS endpoint
     if the request involves toggling the `FileUploadBox`'s mutability
-- `POST /access-grant`: Grant user access to a `FileUploadBox`
+- `POST /access-grants`: Grant user access to a `ResearchDataUploadBox`
   - Requires Data Steward Role
   - Instructs the CRS to create a new claim for the specified user
   - Request body must contain:
-    - `FileUploadBox` ID
+    - `ResearchDataUploadBox` ID
     - User ID
     - IVA ID
     - Any other pertinent information, such as access expiration date.
   - Browsing for and revoking claims can be done through the upcoming Claims Browser
+- `GET /access-grants`: List access grants
+  - Requires Data Steward Role
+  - Makes a call to the CRS to list existing access grants
+  - Query parameters can be supplied to filter results:
+    - User ID
+    - IVA ID
+    - Box ID
+    - Validity (a boolean)
+- `DELETE /access-grants/{grant_id}`: Revoke an access grant
+  - Requires Data Steward Role
+  - Makes a call to the CRS to delete the access grant
 - `GET /boxes/{box_id}/uploads`: Retrieve list of file IDs for `ResearchDataUploadBox`
   - Signs a `ViewFileBoxWorkOrder` token and calls matching UCS endpoint
 
 #### Work Package Service:
-- `GET /users/{user_id}/boxes`: List all `FileUploadBox` IDs available to the user
+- `GET /users/{user_id}/boxes`: List all `ResearchDataUploadBox` IDs available to the user based on upload access grants in the CRS
 - `POST /work-packages/{work_package_id}/boxes/{box_id}/work-order-tokens`: Create a WOT for uploading files
   - Requires a Work Package Access Token, so the user must have already created a Work Package
   - The request body must contain the work type and file alias or ID, depending on the
     work type
+  - The box ID is the ID of a `ResearchDataUploadBox`, and the WPS exchanges that for the ID of the associated `FileUploadBox` in its database when making the WOT.
 
 #### Claims Repository Service:
 - CRS Authentication for upload endpoints should match existing download counterparts
 - `GET /upload-access/grants`: lists existing upload access grants
-- `GET /upload-access/users/{user_id}/boxes`: lists which `FileUploadBoxes` a user can access
-- `GET /upload-access/users/{user_id}/boxes/{box_id}`: check if a user has access to a certain upload box
+- `GET /upload-access/users/{user_id}/boxes`: lists which `ResearchDataUploadBoxes` a user can access
+- `GET /upload-access/users/{user_id}/boxes/{box_id}`: check if a user has access to a certain research data upload box
 - `POST /upload-access/users/{user_id}/ivas/{iva_id}/boxes/{box_id}`: grant upload access
   - This is called by the UOS when the Data Steward grants a user upload access
 - `DELETE /upload-access/grants/{grant_id}`: revoke upload access
