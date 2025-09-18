@@ -269,12 +269,16 @@ In the case of a Data Steward:
    returns any/all `ResearchDataUploadBoxes`, according to any filtering and pagination applicable.
 
 In the case of a non-Data Steward:  
-1. The user uses the Data Portal to view a list of `ResearchDataUploadBoxes` available to them.
-2. The Data Portal makes a `GET` request to the UOS.
-3. The UOS sees that the request from a user that is NOT a Data Steward.
-4. The UOS sends a request to the CRS to see which `ResearchDataUploadBoxes` the user may access.
-5. The CRS returns a list of IDs to the UOS.
-6. The UOS returns any/all `ResearchDataUploadBoxes`, according to any filtering and pagination applicable.
+> Note that regular users will see boxes via the Work Package Manager of the Data Portal
+> when creating a work package, and that request goes to the WPS. When a user wants to
+> see a box in order to lock it, the retrieval request goes to the UOS.
+
+1. The user uses the Data Portal to view a list of `ResearchDataUploadBoxes` available to them, either in the Work Package Manager or in a yet to be designed section (e.g. to lock the box).
+2. The Data Portal makes a `GET` request to the UOS or WPS (see note above).
+3. The service sees that the request from a user that is NOT a Data Steward.
+4. The service sends a request to the CRS to see which `ResearchDataUploadBoxes` the user may access.
+5. The CRS returns a list of accessible boxes to the service, along with expiration dates.
+6. The service returns any/all `ResearchDataUploadBoxes`, according to any filtering and pagination applicable.
 
 ### `ResearchDataUploadBox` Info Update
 > Requires that the user journey "`ResearchDataUploadBox` Creation" has been completed.
@@ -404,7 +408,7 @@ A Data Steward uses the Data Portal to make a request to revoke a given upload a
 
 ![List Upload Access](./images/list_upload_access.png)
 
-A Data Steward uses the Data Portal to make a request to revoke a given upload access grant by ID. The Data Portal sends a request to the UOS, which verifies that the Data Steward has the requisite role. The UOS makes a call to the CRS's `GET /upload-access/grants` endpoint, including any search filters provided by the DS as query parameters. The CRS returns a compiled list of grants to the UOS, which returns the information to the Data Portal.
+A Data Steward uses the Data Portal to see the complete or partial list of existing upload grants. The Data Portal sends a request to the UOS, which verifies that the Data Steward has the requisite role. The UOS makes a call to the CRS's `GET /upload-access/grants` endpoint, including any search filters provided by the DS as query parameters. The CRS returns a compiled list of grants to the UOS, which returns the information to the Data Portal.
 
 ## API Definitions:
 
