@@ -268,17 +268,25 @@ In the case of a Data Steward:
 2. The UOS sees that the request comes from a user with the Data Steward role and
    returns any/all `ResearchDataUploadBoxes`, according to any filtering and pagination applicable.
 
-In the case of a non-Data Steward:  
+In the case of a regular user getting multiple boxes:  
 > Note that regular users will see boxes via the Work Package Manager of the Data Portal
 > when creating a work package, and that request goes to the WPS. When a user wants to
 > see a box in order to lock it, the retrieval request goes to the UOS.
 
-1. The user uses the Data Portal to view a list of `ResearchDataUploadBoxes` available to them, either in the Work Package Manager or in a yet to be designed section (e.g. to lock the box).
-2. The Data Portal makes a `GET` request to the UOS or WPS (see note above).
+1. The user uses the Data Portal to view a list of `ResearchDataUploadBoxes` available to them, either in the Work Package Manager or in a yet to be designed section (e.g. to lock the box). This request can include filtering criteria.
+2. The Data Portal makes a `GET` request to the UOS or WPS (see note above), along with any filtering criteria.
 3. The service sees that the request from a user that is NOT a Data Steward.
-4. The service sends a request to the CRS to see which `ResearchDataUploadBoxes` the user may access.
-5. The CRS returns a list of accessible boxes to the service, along with expiration dates.
-6. The service returns any/all `ResearchDataUploadBoxes`, according to any filtering and pagination applicable.
+4. The service sends a request to the CRS to see which `ResearchDataUploadBoxes` the user may access, along with any filtering criteria.
+5. The CRS returns a dict of IDs of accessible boxes mapped to expiration dates.
+6. The service returns any/all `ResearchDataUploadBoxes`, according to any filtering and pagination applicable. The WPS returns a list of `ResearchDataUploadBox` models with the expiration date added to it. The UOS returns a pagination-friendly dict that includes the total results count and the actual returnable boxes as limited by any pagination. If skip/limit are not specified, all possible boxes will be returned, and in that case the number returned and the total results count will be equal.
+
+In the case of a regular user getting a single box:
+> Note that Data Stewards' requests are never routed to the CRS in this journey. 
+
+1. The request comes in from the Data Portal (regardless of why or where) to the UOS, specifying a single box ID.
+2. The UOS makes a request to the CRS to see if the user has access.
+3. The CRS checks its DB and returns either an expiration date or `null` to the UOS.
+4. If the user has access, the UOS returns the box information to the Data Portal.
 
 ### `ResearchDataUploadBox` Info Update
 > Requires that the user journey "`ResearchDataUploadBox` Creation" has been completed.
