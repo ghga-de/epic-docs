@@ -308,7 +308,7 @@ as well as the timestamp.
 
 ![Create Work Package](./images/create_work_package.png)
 
-The user uses the Data Portal to see which `ResearchDataUploadBoxes` they have access to, then
+The user uses the Data Portal to see which `ResearchDataUploadBoxes` they have access to by sending a request to the WPS (see retrieval journey above), then
 creates a work package for the new `ResearchDataUploadBox`. The WPS validates the request,
 creates the work package, and returns the Work Package Access Token (WPAT) to the user.
 The user can then use this WPAT with the `ghga-connector` to upload files.
