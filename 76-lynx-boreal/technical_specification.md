@@ -56,10 +56,7 @@ When a user shall be enabled to upload Research Data to GHGA, a Data Steward cre
 user can create a work package for the new `FileUploadBox` and use the `ghga-connector` to upload
  Research Data. See the description of the UOS and the **User Journeys** for more detailed information.
 
-Both `FileUploadBox` and `FileUpload` changes are emitted as outbox events, but the
-UCS does not consume any events or store any other data. `FileUploadBox` events are
-consumed by the UOS in oder to update the file count and total size of the corresponding
-`ResearchDataUploadBoxes`, while the `FileUploads` are consumed by other file services.
+Both `FileUploadBox` and `FileUpload` changes are emitted as outbox events. The UCS consumes `FileUploadReport` events, which are regular events (likely persisted by the publisher) that it uses to update the `state` field on corresponding `FileUpload` objects and remove archived files from the inbox. `FileUploadBox` events are consumed by the UOS in oder to update the file count and total size of the corresponding `ResearchDataUploadBoxes`, while the `FileUploads` are consumed by other file services.
 
 The UCS has a REST API, but requests only come from two places: `ghga-connector` and the
 UOS. All endpoints are secured by Work Order Tokens (WOTs) signed by either the UOS (see
