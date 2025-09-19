@@ -24,18 +24,21 @@ epic.
 ### Not included:
 - Archive test bed integration
 - Subsequent FIS or IFRS updates for the upload path
+  - One exception is that we will implement a rough sketch for handling FileUploadReports published by FIS. This functionality is to be concretely defined in an upcoming epic, but we at least know that the UCS will consume these reports to update the state of the corresponding FileUploads and delete the objects from the S3 inbox bucket.
 - Any front-end work that may be needed
 - GHGA-Connector update
 
 ### Upload Controller Service (UCS)
 
-The UCS is responsible for two things:
+The UCS is responsible for three things:
 1. Cataloging individual files for a given file bundle without knowing
 anything about studies or other business concepts.
 2. Facilitating the actual upload of said files by:
    - Opening a new multipart S3 upload
    - Dispensing pre-signed part upload URLs
    - Completing/cancelling the S3 upload
+3. Removing files from the S3 inbox bucket upon receipt of a matching FileUploadReport
+   - As stated above, FileUploadReports are published by the FIS. We will avoid diving deeper on this functionality in order to keep epic spec boundaries from bleeding too much.
 
 In the UCS, a file bundle is represented by a minimalistic abstraction called a
 `FileUploadBox`, and a file is represented as a `FileUpload`. The former offers a way to
@@ -165,6 +168,8 @@ Service requires just one flavor of WOT to operate, the UCS requires more:
 | `ViewFileBoxWorkOrder`           | UOS    | All                  | View list of files for a `FileUploadBox`        |
 | `CreateFileWorkOrder`          | WPS    | Users                | Initialize a `FileUpload` and obtain new file ID |
 | `UploadFileWorkOrder`          | WPS    | Users                | Obtain a part upload URL for a given file ID. Can also be used to delete the file. |
+| `CloseFileWorkOrder`          | WPS    | Users                | Conclude the S3 multipart upload and update `FileUploadState`. |
+| `DeleteFileWorkOrder`          | WPS    | Users                | Delete the file (cancel upload and remove file from S3 as applicable). |
 
 These tokens authorize users to perform the labeled action (work type) within the UCS, and they only
 carry information necessary for the given action, such as `file_id` or `box_id` in
@@ -191,13 +196,13 @@ WPAT to the WPS, and then makes at least three calls for each file:
    - The user receives the `file_id` of the newly created `FileUpload`
 2. A GET request to the UCS to obtain a file part upload URL. This call is repeated for
 each file part.
-   - This requires an `UploadFileWorkOrder` token of type "upload" from the WPS.
+   - This requires an `UploadFileWorkOrder` token from the WPS.
    - The user supplies the `file_id` to get the above token.
    - The token is only valid for a file with the matching `file_id`.
-3. A final PATCH request to the UCS to complete the file upload.
-   - This uses a `UploadFileWorkOrder` token of type "close".
-4. *Optional*: The user desires to delete a file:
-   - The user obtains a `UploadFileWorkOrder` token of type "delete" from the WPS
+1. A final PATCH request to the UCS to complete the file upload.
+   - This uses a `CloseFileWorkOrder` token.
+2. *Optional*: The user desires to delete a file:
+   - The user obtains a `DeleteFileWorkOrder` token from the WPS
    - The user performs a DELETE request via the `ghga-connector`.
 
 
@@ -342,7 +347,7 @@ information. The WOT carries the box ID and file alias.
 The following is accomplished using the `ghga-connector` for each file:
 
 1. The Connector uploads the file in chunks:
-   - The Connector sends the WPAT and file ID to the WPS in order to obtain a `UploadFileWorkOrder`.
+   - The Connector sends the WPAT and file ID to the WPS in order to obtain an `UploadFileWorkOrder`.
    - The Connector uses the `UploadFileWorkOrder` token to call the UCS's
      `GET /boxes/{box_id}/uploads/{file_id}/parts/{part_no}` endpoint.
    - The WOT carries the file ID and box ID, which are cross-checked with the URL.
@@ -350,8 +355,8 @@ The following is accomplished using the `ghga-connector` for each file:
    - The Connector uploads the file part by using the upload URL.
    - The Connector repeats this process for every file part until all parts are uploaded.
 2. The Connector makes a call to `PATCH /boxes/{box_id}/uploads/{file_id}` to
-   inform the UCS that the file upload is complete. This request requires a
-   `UploadFileWorkOrder` token. The UCS sets `complete=True` for the `FileUpload` with
+   inform the UCS that the file upload is complete. This request requires an
+   `UploadFileWorkOrder` token. The UCS sets `state=inbox` for the `FileUpload` with
    the matching ID and instructs S3 to complete the multipart upload. The Connector
    displays a message to the user indicating that the file upload was successful.
 
@@ -361,8 +366,8 @@ The following is accomplished using the `ghga-connector` for each file:
 
 The user, via the `ghga-connector` with a valid WPAT, makes a request to the UCS's
 `DELETE /boxes/{box_id}/uploads/{file_id}` endpoint, indicating they wish to
-delete a file from the associated `FileUploadBox`. If a valid `UploadFileWorkOrder` token
-of type "delete" is supplied with the request, the UCS cancels the ongoing upload if it
+delete a file from the associated `FileUploadBox`. If a valid `DeleteFileWorkOrder`
+token is supplied with the request, the UCS cancels the ongoing upload if it
 exists and deletes the `FileUpload` object from the database. It modifies the linked
 `FileUploadBox` so that the total file size field is reduced by the size of the deleted
 file, and decrements the file count. The UCS then emits an outbox event for the
@@ -378,8 +383,8 @@ The user uses the Data Portal to *LOCK* the `ResearchDataUploadBox`. The Data Po
 request to the UOS, which checks with the CRS that the user may access this `ResearchDataUploadBox`.
 As long as the user is authorized and the `ResearchDataUploadBox`'s current state is `OPEN`,
 the UOS signs a `ChangeFileBoxWorkOrder` token and calls the UCS's
-`PATCH /boxes/{box_id}` endpoint. The UCS checks that there are no `FileUploades`
-for the `FileUploadBox` with `completed=False`. If all files are completed, the UCS
+`PATCH /boxes/{box_id}` endpoint. The UCS checks that there are no `FileUploads`
+for the `FileUploadBox` with `state=init`. If all files are inboxed, the UCS
 changes the `FileUploadBox`'s mutability to `False`, emits a new outbox event for the
 upsertion, and sends a successful response to the UOS. The UOS updates the
 `ResearchDataUploadBox` state to `LOCKED`.
@@ -440,14 +445,14 @@ A Data Steward uses the Data Portal to see the complete or partial list of exist
   - Request body must contain the required file upload details
   - Path arg and token must agree on box ID, and alias must match between body and token
 - `GET /boxes/{box_id}/uploads/{file_id}/parts/{part_no}`: Get pre-signed S3 upload URL for file part
-  - Requires `UploadFileWorkOrder` token of type "upload" from WPS
+  - Requires `UploadFileWorkOrder` token from the WPS
   - Path args and token must agree on box ID and file ID
 - `PATCH /boxes/{box_id}/uploads/{file_id}`: Conclude file upload in UCS
-  - Requires `UploadFileWorkOrder` token of type "close" from WPS
-  - Sets the `FileUpload` to `completed=True` and tells S3 to close the multipart upload.
+  - Requires `CloseFileWorkOrder` token from the WPS
+  - Sets the `FileUpload` to `state=inbox` and tells S3 to close the multipart upload.
   - Path args and token must agree on box ID and file ID
 - `DELETE /boxes/{box_id}/uploads/{file_id}`: Remove a `FileUpload` from the `FileUploadBox`
-  - Requires `UploadFileWorkOrder` token of type "delete" from WPS
+  - Requires `DeleteFileWorkOrder` token from the WPS
   - Deletes the `FileUpload` and tells S3 to cancel the multipart upload if applicable.
   - Path args and token must agree on box ID and file ID
 
@@ -520,8 +525,8 @@ class FileUploadBox(BaseModel):
 class FileUpload(BaseModel):
     """A File Upload"""
 
-    upload_id: UUID4
-    completed: bool = False # whether or not the file upload has finished
+    upload_id: UUID4  # unique identifier for the instance
+    state: Literal["init", "inbox", "archived"] = "init"
     alias: str  # the submitted alias from the metadata (unique within the box)
     checksum: str # Unencrypted checksum
     size: int
@@ -574,30 +579,40 @@ The following new WOT schemas should be created in the WPS:
 ```python
 # Authored by the WPS:
 DownloadFileWorkOrder:  # replaces current `WorkOrderToken` model
-   type: "download"
-   file_id: str  # note: user information is no longer included
+    type: "download"
+    file_id: str  # note: user information is no longer included
 
 CreateFileWorkOrder:
-  type: "create"
-  alias: str
-  box_id: str
+    type: "create"
+    alias: str
+    box_id: UUID4
 
 UploadFileWorkOrder:
-   type: "upload" | "close" | "delete"
-   file_id: str
-   box_id: str
+    type: "upload"
+    file_id: UUID4
+    box_id: UUID4
+
+CloseFileWorkOrder:
+    type: "close"
+    file_id: UUID4
+    box_id: UUID4
+
+DeleteFileWorkOrder:
+    type: "delete"
+    file_id: UUID4
+    box_id: UUID4
 
 # Authored by the UOS
 CreateFileBoxWorkOrder:
-  type: "create"
+    type: "create"
 
 ChangeFileBoxWorkOrder:
-   type: "lock" | "unlock"
-   box_id: str
+    type: "lock" | "unlock"
+    box_id: UUID4
 
 ViewFileBoxWorkOrder:
-   type: "view"
-   box_id: str
+    type: "view"
+    box_id: UUID4
 ```
 
 
