@@ -13,7 +13,7 @@ The current implementation is based on [tenacity](https://tenacity.readthedocs.i
 As the retry parameters are configured dynamically, the more ergonomic, decorator based retry handling cannot be easily used.
 Subsequently, an (Async)Retrying object configured at startup is (rather awkwardly) passed along the call stack.
 
-To move the responsibility away from the caller and make the retry functionality trivially reusable, a custom HTTPTransport class shall be implemented, dealing with both general retry logic and (potentially stateful) rate limited requests.
+To move the responsibility away from the caller and make the retry functionality trivially reusable, a custom Transport class shall be implemented, dealing with both general retry logic and (potentially stateful) rate limited requests.
 
 ### Included/Required:
 
@@ -46,7 +46,7 @@ There are some requirements and possible (existing) pitfalls to consider during 
 4) The logic around jitter could be reused for the 429 response if the `RetryAfter` header is treated as a baseline for all subsequent requests and not just the immediately following one, so something like `asyncio.sleep(max(self.jitter, self.retry_after))` could be applied per connection.
 5) The potential issue in this approcach is throttling the request frequency too much and never recovering to a more appropriate rate. 
 To combat this, the connection could forget about the `retry_after` after a specified amount of requests and go back to just using the jitter.
-6) There's no way to track separate connections/influence handout in an easy way on the httpx/transport level. 
+6) There's no easily apparant way to track separate connections/influence handout on the httpx/transport level. 
 To guarantee that connections are reused and the limit is respected on a per connection level, the transport would need to keep track of n 1 sized connection pools, instead of one n sized connection pool. 
 This idea has to be tested in practice first, to see if there are inherent shortcomings compared to using a normal transport backed by one connection pool
 
@@ -59,6 +59,7 @@ class and deriving from its base class instead might be required to make things 
 ### Where to implement
 
 An initial implementation could be tested in the recent S3 part size benchmarking repo, while the completed implementation should be placed in a repository from which it can easily be imported into different parts in the code base, so ghga-service-commons is most likely the appropriate place.
+Then, as a first step and use case, this implemetation could be used both in the datasteward kit and the connector.
 
 ## Human Resource/Time Estimation:
 
