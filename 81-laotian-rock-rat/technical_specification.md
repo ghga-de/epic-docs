@@ -50,9 +50,9 @@ To hide implementation complexity from the users of the composed transports, a f
 This factory should provide methods to get two transports:
 The first one providing all three mentioned layers, i.e. caching, retry logic and responding to rate limiting, and the second one providing a transport covering only the retry and rate limiting logic, as not all users need a caching layer.
 ![Transport Factory](./images/transport_factory.png)
-One crucial point that this factory has to provide is getting generic Transport configuration to the correct Transport, as it might not be applied otherwise.
 The instances returned by the factory are the respective lowest level Transport, referenced directly by the arrows from the `TransportFactory` in the image.
 Those can be plugged into the `httpx.AsyncClient` of the caller during instantiation. 
+One crucial point that this factory has to provide is getting generic Transport configuration to the correct Transport, as only the configuration of the innermost wrapped Transport is applied.
 
 ## Additional Implementation Details:
 
@@ -76,7 +76,8 @@ This idea has to be tested in practice first, to see if there are inherent short
 
 Logging can be implemented around the `tenacity` based functionality inside the RetryTransport, as the (Async)Retrying can be configured with callbacks to run before or after each retry.
 The factory would need to expose corresponding paramters to initialize that instance correctly, if logging is requested by the caller.
-Providing custom logging functions might be 
+The factory could either provide boolean flags to use pre-implemented log messages or pass through custom logging functions from the call site.
+The second implementation might be a bit leaky, depending on inner knowdledge of `tenarcity` `RetryState`s, so if no configurable, custom logic is needed, the first option should be preferred.
 
 ### Where to test and implement
 
