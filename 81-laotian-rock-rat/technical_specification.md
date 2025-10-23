@@ -49,7 +49,10 @@ In addition, different combinations of Transports are possible, but not all are 
 To hide implementation complexity from the users of the composed transports, a factory shall be implemented alongside the missing Transports inside ghga-service-commons.
 This factory should provide methods to get two transports:
 The first one providing all three mentioned layers, i.e. caching, retry logic and responding to rate limiting, and the second one providing a transport covering only the retry and rate limiting logic, as not all users need a caching layer.
+![Transport Factory](./images/transport_factory.png)
 One crucial point that this factory has to provide is getting generic Transport configuration to the correct Transport, as it might not be applied otherwise.
+The instances returned by the factory are the respective lowest level Transport, referenced directly by the arrows from the `TransportFactory` in the image.
+Those can be plugged into the `httpx.AsyncClient` of the caller during instantiation. 
 
 ## Additional Implementation Details:
 
