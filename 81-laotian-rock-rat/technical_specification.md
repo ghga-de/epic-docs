@@ -13,26 +13,45 @@ The current implementation is based on [tenacity](https://tenacity.readthedocs.i
 As the retry parameters are configured dynamically, the more ergonomic, decorator based retry handling cannot be easily used.
 Subsequently, an (Async)Retrying object configured at startup is (rather awkwardly) passed along the call stack.
 
-To move the responsibility away from the caller and make the retry functionality trivially reusable, a custom Transport class shall be implemented, dealing with both general retry logic and (potentially stateful) rate limited requests.
+To move the responsibility away from the caller and make the retry functionality reusable, the current logic can be moved into custom httpx.(Async)Transport class that can be plugged into an httpx.(Async)Client.
+Adding more functionality on top of an existing transports can be achieved by wrapping them and delegating the call to actually perform the request up through the wrapping layers.
+This way correctly responding to HTP 429 rate limiting responses and caching can be combined with more general retry logic.
 
 ### Included/Required:
 
-### Custom (Async)HTTPTransport
-A transport is an object that resides at the interface of higher level abstractions and the lower level code dealing with the actaul details of transporting bytes over the network.
+#### Custom (Async)HTTPTransport
+A transport is an object that resides at the interface of higher level abstractions and the lower level code dealing with the actual details of transporting bytes over the network.
 
 It can easily be plugged into a client, manages the underlying connection (pool), delegates requests and performs basic error handling (see 
 [transports in httpx](https://github.com/encode/httpx/blob/master/httpx/_transports/default.py)).
 As such, it seems a fitting base class for implementing a custom variant with more involved retry logic, adhering to rate limits.
 
-Moving the existing tenacity based retry logic should be straight forward, converting the (Async)Retrying to a property of the transport, wrapping existing transport code where possible.
-Adhering to rate limits might need some more involved logic around connection pooling to keep track of the current request rate per connection or across the entire connection pool, depending on further underlying assumptions and the strategy chosen.
+#### RetryTransport
+
+Moving the existing tenacity based retry logic should be straight forward, converting the AsyncRetrying to a property of the transport, wrapping the `self._transport.handle_async_request(request)` call inside its own `handle_async_request` method.
+
+#### RatelimitTransport
+
+A Transport dealing with rate limiting would need to be on top of the call chain, meaning it cannot wrap another transport.
+In addition, rate limiting can be (somewhat) decoupled from the general retry and caching logic, if all transports get to see the response and can process it independently.
+The Transport implementing the caching or retry logic has to wrap the RatelimitTransport and call `RatelimitTransport.handle_async_request`, so this transport is the only one that directly forwards the request to the underlying connection pool(s), meaning it can manage state around the connections without interfering with the other transports wrapping it.
+Managing some lightweight amount of state seems necessary to enforce request rates when reusing existing connections.
+
+#### AsyncCacheTransport
+
+This is an already existing transport implemented by the `hishel` library, currently used in the GHGA Connector.
+To get caching to work correctly, this one has to be on the lowest level of the call chain, not being wrapped by another transport. 
+
+#### Transport Factory
+
+The description of the different Transports induces a hierarchy and the setup logic, that is required, does not allow for trivial composability.
+In addition, different combinations of Transports are possible, but not all are meaningful for actual usage, e.g. a transport providing caching and rate limiting, but not retry functionality would be ill-suited to deal with flaky connections.
+To hide implementation complexity from the users of the composed transports, a factory shall be implemented alongside the missing Transports inside ghga-service-commons.
+This factory should provide methods to get two transports:
+The first one providing all three mentioned layers, i.e. caching, retry logic and responding to rate limiting, and the second one providing a transport covering only the retry and rate limiting logic, as not all users need a caching layer.
+One crucial point that this factory has to provide is getting generic Transport configuration to the correct Transport, as it might not be applied otherwise.
 
 ## Additional Implementation Details:
-
-### Tenacity Retry Logic
-
-Implementation could be realized by subclassing the `httpx.(Async)HTTPTransport` or its base class, overriding methods to only deal with retry logic and wrap and delegate to the corresponding parent methods.
-This would mean much of the existing code could be reused and only the error handling would need some additional care to be appropriate for the abstraction level it's being moved to.
 
 ### Responding to Rate Limiting 
 
@@ -46,17 +65,17 @@ There are some requirements and possible (existing) pitfalls to consider during 
 4) The logic around jitter could be reused for the 429 response if the `RetryAfter` header is treated as a baseline for all subsequent requests and not just the immediately following one, so something like `asyncio.sleep(max(self.jitter, self.retry_after))` could be applied per connection.
 5) The potential issue in this approcach is throttling the request frequency too much and never recovering to a more appropriate rate. 
 To combat this, the connection could forget about the `retry_after` after a specified amount of requests and go back to just using the jitter.
-6) There's no easily apparant way to track separate connections/influence handout on the httpx/transport level. 
+6) There's no easily apparent way to track separate connections/influence handout on the httpx/transport level. 
 To guarantee that connections are reused and the limit is respected on a per connection level, the transport would need to keep track of n 1 sized connection pools, instead of one n sized connection pool. 
 This idea has to be tested in practice first, to see if there are inherent shortcomings compared to using a normal transport backed by one connection pool
 
-### Discrepancies
+### Logging
 
-The goals of the last two subsections are not fully aligned, yet.
-Subclassing the `(Async)HTTPTransport` class and managing multiple connection pools seem mutually exclusive, so some code duplication from the `(Async)HTTPTransport`
-class and deriving from its base class instead might be required to make things work.
+Logging can be implemented around the `tenacity` based functionality inside the RetryTransport, as the (Async)Retrying can be configured with callbacks to run before or after each retry.
+The factory would need to expose corresponding paramters to initialize that instance correctly, if logging is requested by the caller.
+Providing custom logging functions might be 
 
-### Where to implement
+### Where to test and implement
 
 An initial implementation could be tested in the recent S3 part size benchmarking repo, while the completed implementation should be placed in a repository from which it can easily be imported into different parts in the code base, so ghga-service-commons is most likely the appropriate place.
 Then, as a first step and use case, this implemetation could be used both in the datasteward kit and the connector.
