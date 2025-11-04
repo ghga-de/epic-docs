@@ -72,13 +72,14 @@ To combat this, the connection could forget about the `retry_after` after a spec
 To guarantee that connections are reused and the limit is respected on a per connection level, the transport would need to keep track of n 1 sized connection pools, instead of one n sized connection pool. 
 This idea has to be tested in practice first, to see if there are inherent shortcomings compared to using a normal transport backed by one connection pool
 
+This idea has been superseeded in the actual implementation.
+Customising connection pools is more involved and would couple the raw `AsyncHttpTransport` wrapped by the lowest layer to the `RatelimitingTransport` at the highest layer, which is not something that should be done without more consideration.
+For now, the `Retry-After` response is saved as shared state and applied to configurable number of subsequent requests, falling back to an exponential backoff strategy if no `Retry-After` header is present in the HTTP 429 response.
+
 ### Logging
 
 Logging can be implemented around the `tenacity` based functionality inside the RetryTransport, as the (Async)Retrying can be configured with callbacks to run before or after each retry.
-The factory would need to expose corresponding paramters to initialize that instance correctly, if logging is requested by the caller.
-The factory could either provide boolean flags to use pre-implemented log messages or pass through custom logging functions from the call site.
-The second implementation might be a bit leaky, depending on inner knowdledge of `tenarcity` `RetryState`s, so if no configurable, custom logic is needed, the first option should be preferred.
-
+A default implementation is provided logging internal state for the current retry attempt to help with debugging, but a custom implementation can be passed along to the constructot to be used instead.
 ### Where to test and implement
 
 An initial implementation could be tested in the recent S3 part size benchmarking repo, while the completed implementation should be placed in a repository from which it can easily be imported into different parts in the code base, so ghga-service-commons is most likely the appropriate place.
