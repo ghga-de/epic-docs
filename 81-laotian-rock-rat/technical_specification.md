@@ -7,7 +7,7 @@ Epic planning and implementation follow the
 ## Scope
 ### Outline:
 
-This epic aims to improve upon the current implementation of retry logic for HTTP requests in CLI tools and to provide a solution that can be reused not only across CLI tools, but where necessary in the codebase.
+This epic aims to improve upon the current implementation of retry logic for HTTP requests in CLI tools and to provide a generic solution that can be employed in any service or CLI tool.
 
 The current implementation is based on [tenacity](https://tenacity.readthedocs.io/en/latest/) and tacked on top of existing functionality, provided as a wrapper around httpx.AsyncClient calls.
 As the retry parameters are configured dynamically, the more ergonomic, decorator based retry handling cannot be easily used.
