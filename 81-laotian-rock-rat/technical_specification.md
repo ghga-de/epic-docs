@@ -78,7 +78,7 @@ For now, the `Retry-After` response is saved as shared state and applied to conf
 ### Logging
 
 Logging can be implemented around the `tenacity` based functionality inside the RetryTransport, as the (Async)Retrying can be configured with callbacks to run before or after each retry.
-A default implementation is provided logging internal state for the current retry attempt to help with debugging, but a custom implementation can be passed along to the constructot to be used instead.
+A default implementation is provided logging internal state for the current retry attempt to help with debugging, but a custom implementation can be passed along to the construct to be used instead.
 ### Where to test and implement
 
 An initial implementation could be tested in the recent S3 part size benchmarking repo, while the completed implementation should be placed in a repository from which it can easily be imported into different parts in the code base, so ghga-service-commons is most likely the appropriate place.
