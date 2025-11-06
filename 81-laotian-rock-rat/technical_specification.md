@@ -10,8 +10,7 @@ Epic planning and implementation follow the
 This epic aims to improve upon the current implementation of retry logic for HTTP requests in CLI tools and to provide a generic solution that can be employed in any service or CLI tool.
 
 The current implementation is based on [tenacity](https://tenacity.readthedocs.io/en/latest/) and tacked on top of existing functionality, provided as a wrapper around httpx.AsyncClient calls.
-As the retry parameters are configured dynamically, the more ergonomic, decorator based retry handling cannot be easily used.
-Subsequently, an (Async)Retrying object configured at startup is (rather awkwardly) passed along the call stack.
+Tenacity offers an ergonomic decorator, but we can't (easily) use this due to how we dynamically configure the retry parameters. Instead, we configure an (`Async`)`Retrying` object at startup and awkwardly pass it along the call stack.
 
 To move the responsibility away from the caller and make the retry functionality reusable, the current logic can be moved into custom httpx.(Async)Transport class that can be plugged into an httpx.(Async)Client.
 Adding more functionality on top of an existing transports can be achieved by wrapping them and delegating the call to actually perform the request up through the wrapping layers.
