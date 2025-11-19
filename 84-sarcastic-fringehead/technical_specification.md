@@ -77,17 +77,20 @@ storage_alias: str  # The storage alias for the bucket containing the re-encrypt
 - Responsible for `inbox` bucket cleanup
 
 #### Work to be performed for the UCS:
-- Get schema updates
-- Adapt existing code for updated schemas as necessary
+- [ ] Get schema updates
+- [ ] Adapt existing code for updated schemas as necessary
 
 ### WKVS:
 - Provides the Data Hub Crypt4GH public keys for the GHGA Connector to retrieve
 
 #### Work to be performed for the WKVS:
-- Provide a way to retrieve Crypt4GH public keys for Data Hubs. This can be a dictionary where the keys are storage aliases and the values are the keys. We could alternatively add two-step relation, where the requester exchanges a storage alias for a Data Hub alias, and the Data Hub alias for a key.
+- [ ] Provide a way to retrieve Crypt4GH public keys for Data Hubs. This can be a dictionary where the keys are storage aliases and the values are the keys. We could alternatively add two-step relation, where the requester exchanges a storage alias for a Data Hub alias, and the Data Hub alias for a key.
 
 ### GHGA Connector
 The Connector performs initial file encryption and upload from the user's machine. In order to properly encrypt the file for a specific Data Hub, the Connector needs to contact the WKVS to obtain the appropriate Crypt4GH public key based on the storage alias assigned to the `ResearchDataUploadBox`/`FileUploadBox` created by the Data Steward.
+
+#### Work to be performed for the GHGA Connector
+- [ ] Fetch and use Data Hub public keys
 
 ### FIS:
 The FIS straddles the border between the file services group and everything else, similar to the role played by the UOS. In the past, the FIS acted as a way to ingest file upload metadata and tell other services when a manually validated ("interrogated") file was ready for permanent storage. This had to be done as a temporary solution until the remote file upload and automatic file interrogation was implemented, which is the work proposed in this epic.
