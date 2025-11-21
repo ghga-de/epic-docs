@@ -75,8 +75,8 @@ completed: bool # Whether or not the file upload has finished
 state: str      # The state of the FileUpload. Either "init", "inbox", or "archived"
 state_updated: UTCDatetime  # Timestamp of when state was update
 alias: str      # The submitted alias from the metadata (unique within the box)
-unencrypted_checksum: str   # SHA-256 checksum of the unencrypted file content
-size: int       # The size of the unencrypted file
+decrypted_sha256: str   # SHA-256 checksum of the unencrypted file content
+decrypted_size: int     # The size of the unencrypted file
 ```
 
 #### FileUploadReport
@@ -86,6 +86,23 @@ secret_id: str | None   # The Vault ID of the file secret used for re-encryption
 storage_alias: str      # The storage alias for the interrogation bucket
 inspected_at: UTCDatetime | None  # Date that inspection was completed
 inspection_result: "pass" | "fail" | None  # Outcome of inspection
+encrypted_part_size: int = 0
+encrypted_parts_md5: list[str] = []
+encrypted_parts_sha256: list[str] = []
+```
+
+#### FileInternallyRegistered
+```python
+upload_date: UTCDatetime
+file_id: UUID4
+bucket_id: str
+storage_alias: str
+decrypted_size: int
+decrypted_sha256: str
+secret_id: str
+encrypted_part_size: int
+encrypted_parts_md5: list[str]
+encrypted_parts_sha256: list[str]
 ```
 
 ## Additional Implementation Details:
@@ -137,7 +154,14 @@ The FIS operates an HTTP API the three endpoints.
    - FIS forwards the file secret to EKSS (still encrypted) in exchange for a secret ID.
    - FIS updates the `FileUploadReport` with the new secret ID.
 3. (`POST`) Accept interrogation results
-   - A token-authenticated request contains information about a completed file interrogation. The information includes the `file_id`, `inspection_result`, and `storage_alias` of the interrogation bucket if interrogation is successful.
+   - A token-authenticated request contains information about a completed file interrogation. The information includes the following fields:
+     - `file_id`
+     - `inspection_result`
+     - If successful, then also:
+       - `storage_alias` of the interrogation bucket
+       - `encrypted_part_size`
+       - `encrypted_parts_md5`
+       - `encrypted_parts_sha256`
    - FIS finds the existing `FileUploadReport` in its database, raising an error if it doesn't find it.
    - FIS updates the `FileUploadReport` with the received information and publishes this as a *persistent event*. 
 
@@ -172,12 +196,9 @@ In addition, the existing functionality and config that directly interacts with 
 - [ ] Add HTTP endpoints as outline above
 - [ ] Write tests
 
-When the DHFS finishes re-encrypting a file, it makes a POST request to the FIS with a `FileUploadReport` in the request body. The `FileUploadReport` specifies a file and indicates whether re-encryption was successful or not. Since the DHFS is not connected to our event communication infrastructure, the FIS maintains and publishes these `FileUploadReports` on its behalf. When the DHFS requests a list of files that have been uploaded to its `inbox` bucket, the list returned by the FIS only contains files for which a successful `FileUploadReport` has *not already been received*. This mitigates a race condition where the DHFS polls for `FileUploads` with the INBOX state too quickly. When the FIS gets a new `FileUploadReport`, it publishes the same information as an event, which is consumed by the UCS. The UCS then updates the `FileUpload` to ARCHIVED (which gets published) and deletes the file copy from the `inbox` bucket.
-
-
 
 ### DHFS:
-The DHFS is a new service that is operated by the various Data Hubs for the purpose of performing file validation and re-encryption, and to keep file ingest in general as a federated operation. It polls the FIS's HTTP API to get a list of `FileUploads` for files that have been recently uploaded to its `inbox` bucket. The DHFS decrypts each file and re-encrypts it using a new file secret before uploading it to the Data Hub's `interrogation` bucket. Along the way, it calculates the checksums of the unencrypted and re-encrypted file content. When the whole file has been re-encrypted and uploaded, the DHFS compares the unencrypted content's checksum against the value obtained from the corresponding `FileUpload`, and the re-encrypted content's checksum against the value calculated by S3 in the `interrogation` bucket.
+The DHFS is a new service that is operated by the Data Hubs for the purpose of performing file validation and re-encryption, and to keep file ingest in general as a federated operation. It polls the FIS's HTTP API to get a list of `FileUploads` for files that have been recently uploaded to its `inbox` bucket. The DHFS decrypts each file and re-encrypts it using a new file secret before uploading it to the Data Hub's `interrogation` bucket. Along the way, it calculates the checksums of the unencrypted and re-encrypted file content. When the whole file has been re-encrypted and uploaded, the DHFS compares the unencrypted content's checksum against the value obtained from the corresponding `FileUpload`, and the re-encrypted content's checksum against the value calculated by S3 in the `interrogation` bucket.
 
 If a checksum discrepancy is found, the DHFS rejects the upload and posts a `FileUploadReport` to the FIS's HTTP API which indicates that the file did not pass inspection. If checksums match and there are no other errors during upload, the DHFS accepts the upload and the `FileUploadReport` sent to the FIS reflects that the file passed inspection.
 
