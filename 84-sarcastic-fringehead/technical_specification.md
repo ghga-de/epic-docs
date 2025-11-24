@@ -7,7 +7,7 @@ Epic planning and implementation follow the
 ## Scope
 ### Outline:
 This epic includes all work required to bring the remaining file services into line with the new file upload concept. The first portion of work for the file services was executed under [Lynx Boreal](../76-lynx-boreal/technical_specification.md), and there was also a subsequent portion of work for the GHGA Connector which was carried out according to [Hedgehog Seahorse](../80-hedgehog-seahorse/technical_specification.md). When this epic is finished, all *backend* modifications required for the new upload concept to be realized will be complete. Frontend changes are *not* included in this epic, however, so more work will be required to bring the Data Portal up to speed.
-As for the work to be completed within this epic, the services affected include the File Ingest Service (FIS), Internal File Registry Service (IFRS), the Well-Known Value Service (WKVS), the Upload Controller Service (UCS), the ghga-event-schemas library, and a new service called the Data Hub File Service (DHFS). Additionally, if it is discovered during implementation that further changes need to be made to other services *beyond what is described this epic*, then tickets will be added ad-hoc and associated with this epic.
+As for the work to be completed within this epic, the services affected include the File Ingest Service (FIS), Internal File Registry Service (IFRS), the Well-Known Value Service (WKVS), the Upload Controller Service (UCS), the ghga-event-schemas library, and a new service called the Data Hub File Service (DHFS). Additionally, if it is discovered during implementation that further changes need to be made to other services *beyond what is described in this epic*, then tickets will be added ad-hoc and associated with this epic.
 
 In Lynx Boreal, the UCS was rewritten, the Upload Orchestration Service (UOS) was implemented for the first time, the Claims Repository Service (CRS) was updated to manage permissions for Research Data Upload Boxes, and the Work Package Service (WPS) was updated to manage upload-type work packages. Taken together, these changes create the operational framework for remote file upload, but only to the point of initial ingest. In order to fully realize our file upload concept, we still need to decrypt the uploaded file, verify the integrity via checksum comparison, re-encrypt the file with a new file secret (securely stored in the Encryption Key Store Service, or EKSS), and move the file to a permanent storage bucket registered with the IFRS in what we call "archival".
 
@@ -42,10 +42,25 @@ FIS:
   - Authorization requires a token signed with Data Hub-specific private key
   - Returns `200 OK` and a list of `FileUploads` for files awaiting interrogation
   - Files are grouped by storage alias
+- `GET /reports/{file_id}`
+  - Authorization requires a token signed with Data Hub-specific private key
+  - Returns `200 OK` and `InspectionResults` for the requested file ID
 - `POST /reports`
   - Authorization requires a token signed with Data Hub-specific private key
-  - Request body must contain a `FileUploadReport`
+  - Request body must contain a payload conforming to `InspectionResults` (see below).
   - Returns `201 CREATED`
+
+```python
+class InspectionResults(BaseModel):
+  """Model representing the expected results from file interrogation"""
+
+  file_id: UUID4  # Unique identifier for the file upload
+  inspected_at: UTCDatetime | None  # Date that inspection was completed
+  inspection_result: "passed" | "failed" | "cancelled"  # Outcome of inspection
+  encrypted_part_size: int | None
+  encrypted_parts_md5: list[str] | None
+  encrypted_parts_sha256: list[str] | None
+```
 
 WKVS:
 - `GET /values/data_hub_public_keys`
@@ -64,8 +79,8 @@ DINS:
 id: UUID4       # Unique identifier for the file upload
 box_id: UUID4   # The ID of the FileUploadBox this FileUpload belongs to
 completed: bool # Whether or not the file upload has finished
-state: str      # The state of the FileUpload. Either "init", "inbox", or "archived"
-state_updated: UTCDatetime  # Timestamp of when state was update
+state: str      # The state of the FileUpload. Either "init", "inbox", "cancelled", "failed", or "archived"
+state_updated: UTCDatetime  # Timestamp of when state was updated
 alias: str      # The submitted alias from the metadata (unique within the box)
 decrypted_sha256: str   # SHA-256 checksum of the unencrypted file content
 decrypted_size: int     # The size of the unencrypted file
@@ -79,7 +94,7 @@ box_id: UUID4           # The ID of the FileUploadBox the file belongs to
 secret_id: str | None   # The Vault ID of the file secret used for re-encryption
 storage_alias: str      # The storage alias for the interrogation bucket
 inspected_at: UTCDatetime | None  # Date that inspection was completed
-inspection_result: "pass" | "fail" | None  # Outcome of inspection
+inspection_result: "passed" | "failed" | "cancelled" | None  # Outcome of inspection
 encrypted_part_size: int | None
 encrypted_parts_md5: list[str] | None
 encrypted_parts_sha256: list[str] | None
@@ -106,18 +121,20 @@ encrypted_parts_sha256: list[str]
 The existing schemas should be updated to match what is shown above.
 
 ### UCS:
-- Emits `FileUpload` events as changes and insertions occur. *Already implemented as part of Lynx Boreal.*
-- Responsible for `inbox` bucket cleanup
+*Already implemented as part of Lynx Boreal.* The UCS needs minor updates to accommodate the expanded `FileUpload` model and to interpret the new statuses on the `FileUploadReport`. If a `FileUploadReport` event is received with the `inspection_result` "failed", then the UCS updates the `FileUpload` state to "failed" as well. However, if the value is "cancelled", the UCS will only update the `FileUpload` if the local copy is different. This is because a "cancelled" status might be due to the user deleting a file via Data Portal, or via the GHGA Connector. In the latter case, the UCS is effectively the origin of the cancellation (deletion).
+
+The work to provide a deletion endpoint accessible by GHGA Connector is *not* meant to be part of this epic. For now, assume all deletions/cancellations will be triggered from the Data Portal or the UCS itself rather than the GHGA Connector.
 
 #### Work to be performed for the UCS
 - [ ] Get schema updates
 - [ ] Add `storage_alias` to `FileUpload` by getting the updated `ghga-event-schemas`
+- [ ] Handle other statuses on `FileUploadReport` events and update `FileUpload` accordingly
 
 ### WKVS:
 - Provides the Data Hub Crypt4GH public keys via public HTTP API
 
 #### Work to be performed for the WKVS
-- [ ] Provide a way to retrieve Crypt4GH public keys for Data Hubs. This can be a dictionary where the keys are storage aliases and the values are the keys. We could alternatively add two-step relation, where the requester exchanges a storage alias for a Data Hub alias, and the Data Hub alias for a key.
+- [ ] Provide a way to retrieve Crypt4GH public keys for Data Hubs. This can be a dictionary where the keys are storage aliases and the values are the keys. We could alternatively add a two-step relation, where the requester exchanges a storage alias for a Data Hub alias, and the Data Hub alias for a key.
 
 ### GHGA Connector:
 The Connector performs initial file encryption and upload from the user's machine. In order to properly encrypt the file for a specific Data Hub, the Connector needs to contact the WKVS to obtain the appropriate Crypt4GH public key based on the storage alias assigned to the `ResearchDataUploadBox`/`FileUploadBox` created by the Data Steward.
@@ -140,17 +157,21 @@ If the event represents a `FileUpload` moved into the `INBOX` state, the FIS cre
 #### FIS HTTP API
 > NOTE: Please see the [API Definitions](#api-definitions) section above
 
-The FIS operates an HTTP API the three endpoints.
-1. (`GET`) Serve a list of new file uploads (yet to be interrogated)
-   - A token-authenticated request specifies the storage alias of the `inbox` bucket in question
-   - FIS gets the `FileUploadReports` which match the requested storage alias and have `inspection_result=None`
-   - FIS returns the list of `FileUploads` corresponding to the `FileUploadReports`
-2. (`POST`) Accept a new file secret for deposition in the EKSS
+The FIS operates an HTTP API with these four endpoints:
+1. (`POST`) Accept a new file secret for deposition in the EKSS
    - A token-authenticated request carries an encrypted file secret and a file ID.
    - FIS finds the existing `FileUploadReport` in its database, raising an error if it doesn't find it.
    - FIS forwards the file secret to EKSS (still encrypted) in exchange for a secret ID.
    - FIS updates the `FileUploadReport` with the new secret ID.
-3. (`POST`) Accept interrogation results
+2. (`GET`) Serve a list of new file uploads (yet to be interrogated)
+   - A token-authenticated request specifies the storage alias of the `inbox` bucket in question
+   - FIS gets the `FileUploadReports` which match the requested storage alias and have `inspection_result=None`
+   - FIS returns the list of `FileUploads` corresponding to the `FileUploadReports`
+3. (`GET`) Serve `InspectionResults` for a given file ID
+   - A token-authenticated request supplies a file ID as a path parameter.
+   - FIS finds the existing `FileUploadReport` in its database, raising an error if it doesn't find it (should be translated to a 404 response but logged within the service as an error).
+   - Returns the subset of the `FileUploadReport` corresponding to the `InspectionResults` model structure. This is done to reduce the number of places that the secret ID is communicated, as well as the irrelevant box ID.
+4. (`POST`) Accept interrogation results
    - A token-authenticated request contains information about a completed file interrogation. The information includes the following fields:
      - `file_id`
      - `inspection_result`
@@ -191,7 +212,7 @@ In addition, the existing functionality and config that directly interacts with 
 - [ ] Ensure DLQ is enabled
 - [ ] Add outbox subscriber for `FileUpload` events
 - [ ] Add persistent publisher for `FileUploadReport` events
-- [ ] Add HTTP endpoints as outline above
+- [ ] Add HTTP endpoints as outlined above
 - [ ] Write migration for existing persisted events if possible
 - [ ] Write tests
 
@@ -215,6 +236,7 @@ In both cases, the `FileUploadReport` is broadcasted by the FIS as a Kafka event
   - Generates a new file secret for re-encryption
   - Sends the new file secret to the FIS's HTTP API
     - This is done right away instead of waiting to see if re-encryption is successful
+    - The secret is encrypted using the GHGA public key
   - Calculates the content starting position (offset) from the envelope length
   - Initiates a multipart upload with the Data Hub's `interrogation` bucket
   - Streams the object from the Data Hub's `inbox` bucket chunk-by-chunk
@@ -231,6 +253,8 @@ In both cases, the `FileUploadReport` is broadcasted by the FIS as a Kafka event
 #### DHFS Cleanup Job (secondary instance)
 The secondary duty of the DHFS is to clean up files from the `interrogation` bucket after archival. On each execution, the DHFS retrieves a list of all objects (files) currently in the `interrogation` bucket. Then for each file, the DHFS contacts the Data Hub Information Service (DINS). If the DINS responds with a 404, the DHFS leaves the file in the bucket. If the DINS responds with file information (a successful response), the DHFS knows that archival has been completed, and it deletes the file from the `interrogation` bucket.
 
+Cleanup also needs to be performed for files that pass interrogation but nonetheless removed by the user or Data Steward. Neither the FIS, UCS, nor IFRS can perform this action because they don't have write access to the `interrogation` bucket. So in order to learn about files that need to be deleted, the DHFS will send an HTTP request to FIS for each file ID still in the bucket after completing the above request to the DINS. The DHFS expects to receive the `InspectionResults` for the file (receiving a 404 here would trigger an error since it shouldn't be possible for a file to reach interrogation without having spawned a `FileUploadReport`, the superset of the `InspectionResults`). If the `InspectionResults` data shows the status as either CANCELLED or FAILED, the DHFS will delete the file from the `interrogation` bucket. In the latter case, the DHFS should have already deleted the file itself, but it's possible that a sudden crash could have prevented it from completing the operation.
+
 #### DHFS Configuration
 The DHFS needs the following configuration:
 - LoggingConfig
@@ -238,6 +262,8 @@ The DHFS needs the following configuration:
 - S3ObjectStoragesConfig
 - auth_token_signing_key
   - This is the Data Hub's private key, which it uses to sign auth tokens sent to FIS
+- wkvs_api_url
+  - Used to contact WKVS to get the GHGA public key
 
 ### IFRS:
 The role of the IFRS is to shepherd files into permanent storage, or "archival", by copying them from the `interrogation` bucket located at a Data Hub into the `archive` or `permanent` bucket located at GHGA Central. This only occurs once the Data Hub in question has completed the interrogation process, which is detailed in the [DHFS section](#dhfs) above. Unlike the FIS and DHFS, the IFRS operates only as an event consumer.
@@ -271,10 +297,9 @@ IFRS data migration should be moved to the init container style. Instead of exec
 #### Work to be performed for the IFRS
 - [ ] Add event subscriber for `FileUploadReport` events
 - [ ] Add outbox subscriber for `ResearchDataUploadBox` events
-- [ ] Upon encountering a closed `ResearchDataUploadBox`, retrieve list of concerned files from the FIS service
+- [ ] Upon encountering a closed `ResearchDataUploadBox`, retrieve the list of relevant files from the local store of `FileUploadReport` events
 - [ ] Copy each file from the `interrogation` bucket to the IFRS's permanent bucket
 - [ ] Get the updated `ghga-event-schemas` version and adapt IFRS for changes to `FileInternallyRegistered`
-- [ ] Ensure that the `FileInternallyRegistered` event is properly published. This is already implemented, but it is possible that we'll have to adjust something to keep it functioning.
 - [ ] Migrate existing data in the `file_metadata` collection
 - [ ] Create new collection to preserve existing file accession-to-file ID associations
 - [ ] Migrate existing data in the `ifrsPersistedEvents` collection
@@ -327,7 +352,7 @@ Another note about the DCS migrations is that they should be moved to the init c
 #### S3 Bucket Access Permissions
 ![S3 Bucket Access Permissions](./images/bucket_access.png)
 
-#### Sequence Diagram
+#### Normal Upload Sequence Diagram (Beginning as the Upload Completes)
 
 ```mermaid
 sequenceDiagram
@@ -344,6 +369,7 @@ sequenceDiagram
         participant EKSS
         participant FIS
         participant DHFS
+        participant DINS
         participant IFRS
     end
     box rgb(200, 75, 35, 0.5) S3 Buckets
@@ -355,7 +381,8 @@ sequenceDiagram
     Connector->>UCS: Complete Upload
     UCS->>FileUploads: UPSERT: FileUpload(completed: True)
     FileUploads->>FIS: UPSERT: FileUpload(completed: True)
-    DHFS->>FIS: HTTP GET (polling)
+    FIS->>FIS: Create FileUploadReport with initial data
+    DHFS->>FIS: GET (polling)
     FIS-->>DHFS: 200: list[FileUpload]
     note right of DHFS: The following is<br>performed for<br>each file
     DHFS->>inbox: Fetch first file chunk to get envelope
@@ -364,23 +391,23 @@ sequenceDiagram
     DHFS->>FIS: Submit new file secret (encrypted)
     FIS->>EKSS: Submit secret
     EKSS-->>FIS: Secret ID
-    FIS-->>DHFS: New Secret ID
     DHFS->>interrogation: Initiate multipart upload
     DHFS->>DHFS: Generate download URL
     rect rgb(30, 30, 30, .4)
         loop For each file chunk
-            DHFS->>inbox: Stream file chunk
+            inbox->>DHFS: Stream file chunk
             DHFS->>DHFS: Decrypt with old secret
             DHFS->>DHFS: Re-encrypt with new secret
             DHFS->>DHFS: Update checksums
             DHFS->>interrogation: Upload file chunk
         end
     end
-    DHFS->>interrogation: Compare checksums
+    DHFS->>DHFS: Compare checksums
     DHFS->>interrogation: Complete multipart upload
-    DHFS->>FIS: POST {url} FileUploadReport
-    FIS->>FileUploadReports: UPSERT: FileUploadReport
-    FileUploadReports->>UCS: UPSERT: FileUploadReport
+    DHFS->>FIS: POST InspectionResults
+    FIS->>FileUploadReports: Publish: FileUploadReport
+    FileUploadReports->>UCS: Consume: FileUploadReport
+    FileUploadReports->>IFRS: Consume: FileUploadReport
     UCS->>inbox: Delete File
     UCS->>FileUploads: UPSERT: FileUpload(state=ARCHIVED)
     Note right of UCS: UCS considers items as<br> archived once they're <br> uploaded to the <br> interrogation bucket.
@@ -388,13 +415,60 @@ sequenceDiagram
     ResearchDataUploadBoxes->>IFRS: UPSERT: ResearchDataUploadBox(state=CLOSED)
     IFRS->>interrogation: Copy File from interrogation to archive bucket
     interrogation-->>archive: Copy File
-    IFRS->>FileInternallyRegistered: Publish FileInternallyRegistered event
-    FileInternallyRegistered->>FIS: Consume FileInternallyRegistered event
-    DHFS->>FIS: HTTP GET (polling)
-    FIS->>DHFS: 200: list[file_id]
-    DHFS->>interrogation: Delete File
-    DHFS->>FIS: HTTP DELETE
-    FIS->>DHFS: 204: No Content
+    IFRS->>FileInternallyRegistered: Publish FileInternallyRegistered
+    FileInternallyRegistered->>DINS: Consume FileInternallyRegistered
+```
+
+#### DHFS Job Sequence Diagram
+```mermaid
+sequenceDiagram
+    box rgb(0, 150, 210, 0.5) Topics
+        participant FileUploadReports
+    end
+    box rgb(255, 255, 200, .5) Services
+        participant FIS
+        participant DINS
+        participant DHFS
+    end
+    box rgb(200, 75, 35, 0.5) S3 Buckets
+        participant interrogation
+    end
+    
+    DHFS->>interrogation: List object IDs (polling)
+    interrogation-->>DHFS:
+    rect rgb(30, 30, 30, .8)
+        loop For each file in bucket
+            DHFS->>DINS: GET file info
+            DINS-->>DHFS: 200 | 404
+            DHFS->>interrogation: Delete file
+        end
+    end
+    rect rgb(30, 30, 30, .8)
+        loop For each file still remaining in bucket
+            DHFS->>FIS: GET inspection results
+            FIS-->>DHFS: 200 | 404
+            DHFS->>interrogation: Delete (if result is<br>CANCELLED or FAILED)
+        end
+    end
+```
+
+#### `FileUpload` State Diagram
+```mermaid
+stateDiagram-v2
+    [*] --> init: UCS - Upload initiated
+    init --> inbox: UCS - Upload completed
+    inbox --> archived: DHFS report -> FIS (passed)
+    inbox --> failed: DHFS report -> FIS (failed)
+    inbox --> cancelled: UCS - file deleted
+    archived --> [*]
+    failed --> [*]
+    cancelled --> [*]
+
+    note left of inbox
+      Source of truth:
+      - State set by UCS
+      - Transitions driven by FileUploadReport published by FIS
+    end note
 ```
 
 ## Human Resource/Time Estimation:
