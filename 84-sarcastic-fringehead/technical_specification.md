@@ -419,7 +419,7 @@ sequenceDiagram
     FileInternallyRegistered->>DINS: Consume FileInternallyRegistered
 ```
 
-#### DHFS Job Sequence Diagram
+#### DHFS Cleanup Job Sequence Diagram
 ```mermaid
 sequenceDiagram
     box rgb(0, 150, 210, 0.5) Topics
