@@ -42,16 +42,16 @@ FIS:
   - Authorization requires a token signed with Data Hub-specific private key
   - Returns `200 OK` and a list of `FileUploads` for files awaiting interrogation
   - Files are grouped by storage alias
-- `GET /reports/{file_id}`
+- `GET /inspection-reports/{file_id}`
   - Authorization requires a token signed with Data Hub-specific private key
-  - Returns `200 OK` and `InspectionResults` for the requested file ID
+  - Returns `200 OK` and `InspectionReport` for the requested file ID
 - `POST /reports`
   - Authorization requires a token signed with Data Hub-specific private key
-  - Request body must contain a payload conforming to `InspectionResults` (see below).
+  - Request body must contain a payload conforming to `InspectionReport` (see below).
   - Returns `201 CREATED`
 
 ```python
-class InspectionResults(BaseModel):
+class InspectionReport(BaseModel):
   """Model representing the expected results from file interrogation"""
 
   file_id: UUID4  # Unique identifier for the file upload
@@ -167,10 +167,10 @@ The FIS operates an HTTP API with these four endpoints:
    - A token-authenticated request specifies the storage alias of the `inbox` bucket in question
    - FIS gets the `FileUploadReports` which match the requested storage alias and have `inspection_result=None`
    - FIS returns the list of `FileUploads` corresponding to the `FileUploadReports`
-3. (`GET`) Serve `InspectionResults` for a given file ID
+3. (`GET`) Serve `InspectionReport` for a given file ID
    - A token-authenticated request supplies a file ID as a path parameter.
    - FIS finds the existing `FileUploadReport` in its database, raising an error if it doesn't find it (should be translated to a 404 response but logged within the service as an error).
-   - Returns the subset of the `FileUploadReport` corresponding to the `InspectionResults` model structure. This is done to reduce the number of places that the secret ID is communicated, as well as the irrelevant box ID.
+   - Returns the subset of the `FileUploadReport` corresponding to the `InspectionReport` model structure. This is done to reduce the number of places that the secret ID is communicated, as well as the irrelevant box ID.
 4. (`POST`) Accept interrogation results
    - A token-authenticated request contains information about a completed file interrogation. The information includes the following fields:
      - `file_id`
@@ -253,7 +253,7 @@ In both cases, the `FileUploadReport` is broadcasted by the FIS as a Kafka event
 #### DHFS Cleanup Job (secondary instance)
 The secondary duty of the DHFS is to clean up files from the `interrogation` bucket after archival. On each execution, the DHFS retrieves a list of all objects (files) currently in the `interrogation` bucket. Then for each file, the DHFS contacts the Data Hub Information Service (DINS). If the DINS responds with a 404, the DHFS leaves the file in the bucket. If the DINS responds with file information (a successful response), the DHFS knows that archival has been completed, and it deletes the file from the `interrogation` bucket.
 
-Cleanup also needs to be performed for files that pass interrogation but nonetheless removed by the user or Data Steward. Neither the FIS, UCS, nor IFRS can perform this action because they don't have write access to the `interrogation` bucket. So in order to learn about files that need to be deleted, the DHFS will send an HTTP request to FIS for each file ID still in the bucket after completing the above request to the DINS. The DHFS expects to receive the `InspectionResults` for the file (receiving a 404 here would trigger an error since it shouldn't be possible for a file to reach interrogation without having spawned a `FileUploadReport`, the superset of the `InspectionResults`). If the `InspectionResults` data shows the status as either CANCELLED or FAILED, the DHFS will delete the file from the `interrogation` bucket. In the latter case, the DHFS should have already deleted the file itself, but it's possible that a sudden crash could have prevented it from completing the operation.
+Cleanup also needs to be performed for files that pass interrogation but nonetheless removed by the user or Data Steward. Neither the FIS, UCS, nor IFRS can perform this action because they don't have write access to the `interrogation` bucket. So in order to learn about files that need to be deleted, the DHFS will send an HTTP request to FIS for each file ID still in the bucket after completing the above request to the DINS. The DHFS expects to receive the `InspectionReport` for the file (receiving a 404 here would trigger an error since it shouldn't be possible for a file to reach interrogation without having spawned a `FileUploadReport`, the superset of the `InspectionReport`). If the `InspectionReport` data shows the status as either CANCELLED or FAILED, the DHFS will delete the file from the `interrogation` bucket. In the latter case, the DHFS should have already deleted the file itself, but it's possible that a sudden crash could have prevented it from completing the operation.
 
 #### DHFS Configuration
 The DHFS needs the following configuration:
@@ -404,7 +404,7 @@ sequenceDiagram
     end
     DHFS->>DHFS: Compare checksums
     DHFS->>interrogation: Complete multipart upload
-    DHFS->>FIS: POST InspectionResults
+    DHFS->>FIS: POST InspectionReport
     FIS->>FileUploadReports: Publish: FileUploadReport
     FileUploadReports->>UCS: Consume: FileUploadReport
     FileUploadReports->>IFRS: Consume: FileUploadReport
