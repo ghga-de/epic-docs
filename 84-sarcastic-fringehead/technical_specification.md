@@ -31,46 +31,9 @@ All user journeys are already detailed in Lynx Boreal. The operations added in t
 
 ### RESTful/Synchronous:
 
-FIS:
-> See the [FIS HTTP API](#fis-http-api) section for an in-depth explanation
-
-- `POST /secrets`
-  - Authorization requires a token signed with Data Hub-specific private key
-  - Request body must contain an encrypted file secret
-  - Returns `201 CREATED`
-- `GET /uploads/{storage_alias}/inbox`
-  - Authorization requires a token signed with Data Hub-specific private key
-  - Returns `200 OK` and a list of `FileUploads` for files awaiting interrogation
-  - Files are grouped by storage alias
-- `GET /inspection-reports/{file_id}`
-  - Authorization requires a token signed with Data Hub-specific private key
-  - Returns `200 OK` and `InspectionReport` for the requested file ID
-- `POST /reports`
-  - Authorization requires a token signed with Data Hub-specific private key
-  - Request body must contain a payload conforming to `InspectionReport` (see below).
-  - Returns `201 CREATED`
-
-```python
-class InspectionReport(BaseModel):
-  """Model representing the expected results from file interrogation"""
-
-  file_id: UUID4  # Unique identifier for the file upload
-  inspected_at: UTCDatetime | None  # Date that inspection was completed
-  inspection_result: "passed" | "failed" | "cancelled"  # Outcome of inspection
-  encrypted_part_size: int | None
-  encrypted_parts_md5: list[str] | None
-  encrypted_parts_sha256: list[str] | None
-```
-
-WKVS:
-- `GET /values/data_hub_public_keys`
-  - Returns `200 OK` and a dictionary as described in the WKVS section below
-
-DINS:
-- `GET /file_information/{file_id}`
-  - Returns `200 OK` and basic information about the requested file
-  - Returns `404 NOT FOUND` if the file doesn't exist
-  - *This is already implemented - included here for reference*
+[FIS HTTP API](#fis-http-api)  
+[WKVS HTTP API](#wkvs-http-api)  
+[DINS HTTP API](#dins-http-api)  
 
 ### Payload Schemas for Events:
 
@@ -133,8 +96,16 @@ The work to provide a deletion endpoint accessible by GHGA Connector is *not* me
 ### WKVS:
 - Provides the Data Hub Crypt4GH public keys via public HTTP API
 
+#### WKVS HTTP API
+> [Return to API list](#restfulsynchronous)
+
+The WKVS would get the following new endpoint:  
+`GET /values/data_hub_public_keys`:
+- No authentication required
+- Returns `200 OK` and a mapping of storage alias to public key
+
 #### Work to be performed for the WKVS
-- [ ] Provide a way to retrieve Crypt4GH public keys for Data Hubs. This can be a dictionary where the keys are storage aliases and the values are the keys. We could alternatively add a two-step relation, where the requester exchanges a storage alias for a Data Hub alias, and the Data Hub alias for a key.
+- [ ] Provide a way to retrieve Crypt4GH public keys for Data Hubs. This can be a dictionary where the keys are storage aliases and the values are the public keys.
 
 ### GHGA Connector:
 The Connector performs initial file encryption and upload from the user's machine. In order to properly encrypt the file for a specific Data Hub, the Connector needs to contact the WKVS to obtain the appropriate Crypt4GH public key based on the storage alias assigned to the `ResearchDataUploadBox`/`FileUploadBox` created by the Data Steward.
@@ -155,35 +126,49 @@ When a new `FileUpload` event arrives, the FIS first checks to see if it has a c
 If the event represents a `FileUpload` moved into the `INBOX` state, the FIS creates a new `FileUploadReport` with the `file_id` and `storage_alias` fields populated. The remaining fields will all be `None`. The `FileUploadReport` will be updated with the other details later on in the other FIS instance (see below).
 
 #### FIS HTTP API
-> NOTE: Please see the [API Definitions](#api-definitions) section above
+> [Return to API list](#restfulsynchronous)
 
-The FIS operates an HTTP API with these four endpoints:
-1. (`POST`) Accept a new file secret for deposition in the EKSS
-   - A token-authenticated request carries an encrypted file secret and a file ID.
-   - FIS finds the existing `FileUploadReport` in its database, raising an error if it doesn't find it.
-   - FIS forwards the file secret to EKSS (still encrypted) in exchange for a secret ID.
-   - FIS updates the `FileUploadReport` with the new secret ID.
-2. (`GET`) Serve a list of new file uploads (yet to be interrogated)
-   - A token-authenticated request specifies the storage alias of the `inbox` bucket in question
-   - FIS gets the `FileUploadReports` which match the requested storage alias and have `inspection_result=None`
-   - FIS returns the list of `FileUploads` corresponding to the `FileUploadReports`
-3. (`GET`) Serve `InspectionReport` for a given file ID
-   - A token-authenticated request supplies a file ID as a path parameter.
-   - FIS finds the existing `FileUploadReport` in its database, raising an error if it doesn't find it (should be translated to a 404 response but logged within the service as an error).
-   - Returns the subset of the `FileUploadReport` corresponding to the `InspectionReport` model structure. This is done to reduce the number of places that the secret ID is communicated, as well as the irrelevant box ID.
-4. (`POST`) Accept interrogation results
-   - A token-authenticated request contains information about a completed file interrogation. The information includes the following fields:
-     - `file_id`
-     - `inspection_result`
-     - If successful, then also:
-       - `storage_alias` of the interrogation bucket
-       - `encrypted_part_size`
-       - `encrypted_parts_md5`
-       - `encrypted_parts_sha256`
-   - FIS finds the existing `FileUploadReport` in its database (or raises an error).
-   - FIS updates the `FileUploadReport` with the received information and publishes this as a *persistent event*. 
+The FIS operates an HTTP API with these endpoints:
+1. `POST /secrets`: Accept a new file secret for deposition in the EKSS
+   - Authorization requires a token signed with Data Hub-specific private key
+   - Request body must contain an encrypted file secret and associated file ID
+   - Returns `201 CREATED`
+   - Description:
+     - FIS finds the existing `FileUploadReport` in its database, raising an error if it doesn't find it.
+     - FIS forwards the file secret to EKSS (still encrypted) in exchange for a secret ID.
+     - FIS updates the `FileUploadReport` with the new secret ID.
+2. `GET /storages/{storage_alias}/uploads`: Serve a list of new file uploads (yet to be interrogated)
+   - Authorization requires a token signed with Data Hub-specific private key
+   - Returns `200 OK` and a list of `FileUploads` for files awaiting interrogation
+   - Description:
+     - FIS gets the `FileUploadReports` which match the requested storage alias and have `inspection_result=None`
+     - FIS returns the list of `FileUploads` corresponding to the `FileUploadReports`
+3. `GET /inspection-reports/{file_id}`: Serve an `InspectionReport` for a given file ID
+   > Please see the InspectionReport schema definition below this list
+   - Authorization requires a token signed with Data Hub-specific private key
+   - Returns `200 OK` and the `InspectionReport` for the requested file ID
+   - Description:
+     - FIS finds the existing `FileUploadReport` in its database, raising an error if it doesn't find it (should be translated to a 404 response but logged within the service as an error).
+     - Returns the subset of the `FileUploadReport` corresponding to the `InspectionReport` model structure. This is done to reduce the number of places that the secret ID is communicated, as well as the irrelevant box ID.
+4. `POST /inspection-reports`: Accept an inspection report
+   - Authorization requires a token signed with Data Hub-specific private key
+   - Request body must contain a payload conforming to the `InspectionReport` schema
+   - Returns `201 CREATED`
+   - Description:
+     - FIS finds the matching `FileUploadReport` in its database based on the `file_id` (or raises an error).
+     - FIS updates the `FileUploadReport` with the received information and publishes this as a *persistent event*.
 
-For a given file upload, the endpoints will be called in the order listed above.
+```python
+class InspectionReport(BaseModel):
+  """Model representing the expected results from file interrogation"""
+
+  file_id: UUID4  # Unique identifier for the file upload
+  inspected_at: UTCDatetime | None  # Date that inspection was completed
+  inspection_result: "passed" | "failed" | "cancelled"  # Outcome of inspection
+  encrypted_part_size: int | None
+  encrypted_parts_md5: list[str] | None
+  encrypted_parts_sha256: list[str] | None
+```
 
 #### FIS Configuration
 The FIS needs the following configuration:
@@ -308,6 +293,16 @@ IFRS data migration should be moved to the init container style. Instead of exec
 
 ### DINS:
 The DINS subscribes to `FileInternallyRegistered` events from the IFRS to learn about which files are available in the Archive. It also hosts an HTTP API where the outside world can obtain basic information about those same files.
+
+#### DINS HTTP API
+> [Return to API list](#restfulsynchronous)
+
+The DINS endpoint relevant for this epic is as follows:  
+`GET /file_information/{file_id}`:
+- No authentication required
+- Returns `200 OK` and basic information about the requested file
+- Returns `404 NOT FOUND` if the file doesn't exist
+- *This is already implemented - included here for reference*
 
 #### Work to be performed for the DINS
 - [ ] Get the updated `ghga-event-schemas` version and adapt DINS for changes to `FileInternallyRegistered`. This should not require a DB migration because the fields in the DB are already named differently from their counterparts in the schema itself.
