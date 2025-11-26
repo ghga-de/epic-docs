@@ -373,13 +373,13 @@ sequenceDiagram
         participant archive
     end
     
-    Connector->>UCS: Complete Upload
+    Connector->>UCS: Finalize File Upload<br>to inbox bucket
     UCS->>FileUploads: UPSERT: FileUpload(completed: True)
     FileUploads->>FIS: UPSERT: FileUpload(completed: True)
     FIS->>FIS: Create FileUploadReport with initial data
     DHFS->>FIS: GET (polling)
     FIS-->>DHFS: 200: list[FileUpload]
-    note right of DHFS: The following is<br>performed for<br>each file
+    note left of DHFS: We will assume only one file is<br>returned. In reality, the list<br>returned by the FIS will contain<br>multiple files, and the DHFS will<br>process them in parallel.
     DHFS->>inbox: Fetch first file chunk to get envelope
     DHFS->>DHFS: Decrypt envelope with private key
     DHFS->>DHFS: Generate new file secret
