@@ -436,7 +436,7 @@ sequenceDiagram
         loop For each file in bucket
             DHFS->>DINS: GET file info
             DINS-->>DHFS: 200 | 404
-            DHFS->>interrogation: Delete file
+            DHFS->>interrogation: Delete file (if 200)
         end
     end
     rect rgb(30, 30, 30, .8)
