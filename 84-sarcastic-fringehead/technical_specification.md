@@ -88,6 +88,8 @@ The existing schemas should be updated to match what is shown above.
 
 The work to provide a deletion endpoint accessible by GHGA Connector is *not* meant to be part of this epic. For now, assume all deletions/cancellations will be triggered from the Data Portal or the UCS itself rather than the GHGA Connector.
 
+As a final note on the UCS, the UCS is the place where `box_id` is populated for `FileUpload` objects. You can read about that process in Lynx Boreal, but the long-short is that a Data Steward manually creates a `ResearchDataUploadBox` in the UOS, which has a separate ID, and that automatically triggers the creation of a subordinate `FileUploadBox` in the UCS, which has an independent ID. Whenever a new file is added for that box, the `FileUpload` gets the `box_id` of the parent `FileUploadBox`.
+
 #### Work to be performed for the UCS
 - [ ] Get schema updates
 - [ ] Add `storage_alias` to `FileUpload` by getting the updated `ghga-event-schemas`
