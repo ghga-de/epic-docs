@@ -409,6 +409,7 @@ sequenceDiagram
     UOS->>ResearchDataUploadBoxes: UPSERT: ResearchDataUploadBox(state=CLOSED)
     ResearchDataUploadBoxes->>IFRS: UPSERT: ResearchDataUploadBox(state=CLOSED)
     IFRS->>interrogation: Copy File from interrogation to archive bucket
+    note left of IFRS: IFRS will copy each file in<br>the ResearchDataUploadBox
     interrogation-->>archive: Copy File
     IFRS->>FileInternallyRegistered: Publish FileInternallyRegistered
     FileInternallyRegistered->>DINS: Consume FileInternallyRegistered
