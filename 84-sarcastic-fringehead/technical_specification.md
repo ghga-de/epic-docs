@@ -117,7 +117,8 @@ accession: str | None
 > This schema represents what FIS checks for validation when consuming a `FileUpload` event with the `inbox` state
 ```python
 id: UUID4       # Unique identifier for the file upload
-box_id: UUID4   # The ID of the FileUploadBox this FileUpload belongs to
+state: FileUploadState = "init"  # The state of the FileUpload
+state_updated: UTCDatetime  # Timestamp of when state was updated
 storage_alias: str  # The storage alias for the inbox bucket
 decrypted_sha256: str   # SHA-256 checksum of the entire unencrypted file content
 decrypted_size: int     # The size of the unencrypted file
@@ -134,6 +135,7 @@ interrogated_at: UTCDatetime
 interrogation_result: "passed" | "failed" | "cancelled" | None
 encrypted_parts_md5: list[str] | None
 encrypted_parts_sha256: list[str] | None
+can_be_scrubbed: bool = False  # Indicates whether file can be deleted from `interrogation` bucket
 ```
 
 #### ArchivableFileUpload
@@ -304,16 +306,16 @@ The Connector performs initial file encryption and upload from the user's machin
 ### FIS:
 The FIS straddles the border between the file services group and everything else, similar to the role played by the UOS. In the past, the FIS acted as a way to ingest file upload metadata and tell other services when a manually validated ("interrogated") file was ready for permanent storage. This had to be done as a temporary solution until the remote file upload and automatic file interrogation was implemented, which is the work proposed in this epic.
 
-The new role of the FIS is to inform the DHFS when new files arrive in the DHFS's `inbox` bucket, as well as to inform other services of the results of DHFS's interrogation procedure. To do this, the FIS operates as an event consumer in one instance, and runs an HTTP API in another instance. Both instances are described below.
+The new role of the FIS is to inform the DHFS when new files arrive in the DHFS's `inbox` bucket, as well as to inform other services of the results of DHFS's interrogation procedure by publishing `InterrogationReport` outbox events (defined [here](#interrogationreport)). To do this, the FIS operates as an event consumer in one instance, and runs an HTTP API in another instance. Both instances are described below.
 
 #### FIS Event Consumer
 The FIS subscribes to `FileUpload` *outbox events* from the UCS.
 
-When a new `FileUpload` event arrives, the FIS first checks to see if it has a copy already stored in its database. If it does, it then looks at the timestamp in the `state_updated` field; if the local copy is newer, the FIS makes a log and ignores the event. If the inbound event is newer, the FIS compares the values for `state` on the local copy and the inbound copy of the event. If the two values depict a valid transition, e.g. `INIT -> INBOX` or `INBOX -> ARCHIVED`, then the FIS updates its local copy. If the transition is not valid (e.g. `ARCHIVED -> INIT`), FIS raises an error and sends the event to the DLQ. The exact details of the event validation on the FIS-side are not actually important here; they can be decided at implementation time.
+When a new `FileUpload` event arrives with the state `inbox` FIS first checks its database to see if it has a copy already stored in its database. If it does, FIS either ignores the event or raises an error depending on specific criteria (implementation detail). If the event is new, FIS stores the event using the [InboxedFileUpload schema](#inboxedfileupload) so that it can be later relayed to the DHFS. Finally, FIS creates a preliminary `InterrogationReport` with only the file ID field set, which gets published as an outbox event.
 
-If the event represents a `FileUpload` moved into the `INBOX` state, the FIS creates a new `InterrogationReport` with the `file_id` and `storage_alias` fields populated. The remaining fields will all be `None`. The `InterrogationReport` will be updated with the other details later on in the other FIS instance (see below).
+When a `FileUpload` event arrives with a state other than `init` or `inbox`, e.g. `failed`, `cancelled`, `interrogated`, or `archived`, FIS will merely update its local `InboxedFileUpload` copy (or create it if it doesn't exist), and set the corresponding `InterrogationReport.can_be_scrubbed` field to True (resulting in an outbox event). FIS should never store any information for a `FileUpload` with the state `init`.
 
-The FIS *also* subscribes to `FileInternallyRegistered` events from the IFRS. FIS is interested in these events because they communicate that a given file has been successfully copied from the `interrogation` bucket to the the `permanent` bucket. FIS looks in its database for the `InterrogationReport` corresponding to the `FileInternallyRegistered` event and sets the `is_archived` flag to True. Because `InterrogationReport` events are *outbox events*, the FIS will publish this change as an event.
+The FIS *also* subscribes to `FileInternallyRegistered` events from the IFRS. FIS is interested in these events because they communicate that a given file has been successfully copied from the `interrogation` bucket to the the `permanent` bucket. FIS locates the corresponding `InterrogationReport` and raises an error if it can't. It then sets the `can_be_scrubbed` field to True and publishes the change as an outbox event.
 
 #### FIS HTTP API
 > [Return to API list](#restfulsynchronous)
@@ -326,48 +328,39 @@ The FIS operates an HTTP API with these endpoints:
    - Description:
      - FIS finds the existing `InterrogationReport` in its database, raising an error if it doesn't find it.
      - FIS forwards the file secret to EKSS (still encrypted) in exchange for a secret ID.
-     - FIS updates the `InterrogationReport` with the new secret ID.
+     - FIS updates the `InterrogationReport` with the new secret ID and publishes the change as an outbox event.
 2. `GET /storages/{storage_alias}/uploads`: Serve a list of new file uploads (yet to be interrogated)
    - Authorization requires a token signed with Data Hub-specific private key
    - Returns `200 OK` and a list of `FileUploads` for files awaiting interrogation
    - Description:
-     - FIS gets the `InterrogationReports` which match the requested storage alias and have `interrogation_result=None`
-     - FIS returns the list of `FileUploads` corresponding to the `InterrogationReports`
-3. `GET /upload-reports/{file_id}`: Serve a `InterrogationReport` for a given file ID, sans secret ID
+     - FIS gets the `InterrogationReports` which match the requested storage alias and have `interrogation_result=None`, i.e. interrogations which haven't reached a conclusion yet.
+     - FIS returns the list of `FileUploads` corresponding to the `InterrogationReports` from the previous step
+3. `GET /upload-reports/{file_id}`: Serve an `InterrogationReport` for a given file ID, sans secret ID
    - Authorization requires a token signed with Data Hub-specific private key
    - Returns `200 OK` and the `InterrogationReport` for the requested file ID
    - Description:
-     - FIS finds the existing `InterrogationReport` in its database, raising an error if it doesn't find it (should be translated to a 404 response but logged within the service as an error).
+     - FIS finds the existing `InterrogationReport` in its database, raising an error if it doesn't find it (should be translated to `404 NOT FOUND` but logged within the service as an error).
      - Returns the `InterrogationReport` with the secret ID removed.
 4. `POST /inspection-reports`: Accept an inspection report
    - Authorization requires a token signed with Data Hub-specific private key
-   - Request body must contain a payload conforming to the `InspectionReport` schema
+   - Request body must contain a payload conforming to the `InterrogationReport` [schema](#interrogationreport)
    - Returns `201 CREATED`
    - Description:
      - FIS finds the matching `InterrogationReport` in its database based on the `file_id` (or raises an error).
-     - FIS updates the `InterrogationReport` with the received information and publishes this as a *persistent event*.
+     - FIS updates the `InterrogationReport` with the received information and publishes this as an *outbox event*.
 
-
-```python
-class InspectionReport(BaseModel):
-  """Model representing the expected results from file interrogation"""
-
-  file_id: UUID4  # Unique identifier for the file upload
-  interrogated_at: UTCDatetime | None  # Date that interrogation was completed
-  interrogation_result: "passed" | "failed" | "cancelled"  # Outcome of interrogation
-  encrypted_part_size: int | None
-  encrypted_parts_md5: list[str] | None
-  encrypted_parts_sha256: list[str] | None
-```
 
 #### FIS Configuration
+TODO: Add config section to UCS and UOS
 The FIS needs the following configuration:
 - MongoDbConfig
 - KafkaConfig
 - ApiConfigBase
 - LoggingConfig
 - OpenTelemetryConfig
-- EventPubConfig:
+- EventSubConfig:
+  - ghga-event-schemas -> FileInternallyRegisteredEventsConfig
+- OutboxPubConfig:
   - ghga-event-schemas -> InterrogationReportEventsConfig
 - OutboxSubConfig:
   - ghga-event-schemas -> FileUploadEventsConfig
@@ -378,17 +371,21 @@ Upon startup, the HTTP API instance of the FIS will retrieve the list of Data Hu
 
 In addition, the existing functionality and config that directly interacts with Vault should be removed so that EKSS is the sole middleman for Vault activity.
 
+#### FIS Migrations
+The FIS has a persisted events collection, `fisPersistedEvents`, that contains previously published `FileInterrogationSuccessEvents` (`type_` is `"file_interrogation_success"`). These events are essentially the same as the events that will, going forward, be published by the UCS. Therefore, we *also* need to make sure the FIS can publish to the same outbox topic as the UCS. The required migration for the persisted events collection in FIS essentially needs to convert the `payload` of the stored persisted events into outbox events with the new `FileUpload` [schema](#fileupload). This migration should be reversible. FIS will only publish to the `FileUpload` outbox topic if we *republish* events from the FIS. In other words, this is historical data that we are preserving here in FIS for continuity. The historical `FileUpload` information and the local copies of new `FileUpload` objects must use different DAOs. The former should use an outbox DAO while the latter uses a regular DAO. 
+- **One alternative** is to manually exfiltrate the data to UCS.
+- **A second alternative** is to simply drop the data since the files have already been archived and all relevant information is actually stored by IFRS.
 
-#### Open questions
-1. What do we do with the existing FIS data? Just leave it there for now?
-   - Persisted events stored in the FIS are analogous to InterrogationReport events, we might be able to migrate them for continuity.
+Finally, the `ingestedFiles` collection, which contains unassociated accessions, should be dropped.
 
 #### Work to be performed for the FIS
 - [ ] Ensure DLQ is enabled
+- [ ] Swap persistent publisher for outbox publisher for `FileUpload` events.
+- [ ] Address existing persisted event data as described above.
+- [ ] Add event subscriber for `FileInternallyRegistered` events
 - [ ] Add outbox subscriber for `FileUpload` events
-- [ ] Add persistent publisher for `InterrogationReport` events
+- [ ] Add outbox publisher for `InterrogationReport` events
 - [ ] Add HTTP endpoints as outlined above
-- [ ] Write migration for existing persisted events if possible
 - [ ] Write tests
 
 
@@ -579,7 +576,7 @@ sequenceDiagram
     end
     DHFS->>DHFS: Compare checksums
     DHFS->>interrogation: Complete multipart upload
-    DHFS->>FIS: POST InspectionReport
+    DHFS->>FIS: POST InterrogationReport
     FIS->>InterrogationReports: Publish: InterrogationReport
     InterrogationReports->>UCS: Consume: InterrogationReport
     InterrogationReports->>IFRS: Consume: InterrogationReport
