@@ -600,8 +600,7 @@ Another note about the DCS migrations is that they should be moved to the init c
 sequenceDiagram
     box rgb(0, 150, 210, 0.5) Topics
         participant FileUploads
-        participant InterrogationReports
-        participant ResearchDataUploadBoxes
+        participant InterrogationSuccess
         participant FileInternallyRegistered
     end
     box rgb(255, 255, 200, .5) Services
@@ -611,21 +610,20 @@ sequenceDiagram
         participant EKSS
         participant FIS
         participant DHFS
-        participant DINS
         participant IFRS
     end
     box rgb(200, 75, 35, 0.5) S3 Buckets
         participant inbox
         participant interrogation
-        participant archive
+        participant permanent
     end
     
     Connector->>UCS: Finalize File Upload<br>to inbox bucket
-    UCS->>FileUploads: UPSERT: FileUpload(completed: True)
-    FileUploads->>FIS: UPSERT: FileUpload(completed: True)
-    FIS->>FIS: Create InterrogationReport with initial data
+    UCS->>FileUploads: UPSERT: FileUpload(state: INBOX)
+    FileUploads->>FIS: UPSERT: FileUpload(state: INBOX)
+    FIS->>FIS: Store FileUpload as FileUnderInterrogation
     DHFS->>FIS: GET (polling)
-    FIS-->>DHFS: 200: list[FileUpload]
+    FIS-->>DHFS: 200: list[FileUnderInterrogation]
     note left of DHFS: We will assume only one file is<br>returned. In reality, the list<br>returned by the FIS will contain<br>multiple files, and the DHFS will<br>process them in parallel.
     DHFS->>inbox: Fetch first file chunk to get envelope
     DHFS->>DHFS: Decrypt envelope with private key
@@ -645,22 +643,47 @@ sequenceDiagram
         end
     end
     DHFS->>DHFS: Compare checksums
-    DHFS->>interrogation: Complete multipart upload
-    DHFS->>FIS: POST InterrogationReport
-    FIS->>InterrogationReports: Publish: InterrogationReport
-    InterrogationReports->>UCS: Consume: InterrogationReport
-    InterrogationReports->>IFRS: Consume: InterrogationReport
+    rect rgb(30, 90, 30, .8)
+        alt Interrogation is successful
+            DHFS->>interrogation: Complete multipart upload
+            DHFS->>FIS: POST InterrogationReport(passed=True)
+            FIS->>InterrogationSuccess: Publish: InterrogationSuccess
+            InterrogationSuccess->>UCS: Consume: InterrogationSuccess
+            UCS->>FileUploads: UPSERT: FileUpload(state=INTERROGATED)
+        end
+    end
+    rect rgb(90, 30, 30, .8)
+        alt Interrogation fails
+            DHFS->>interrogation: Abort multipart upload
+            DHFS->>FIS: POST InterrogationReport(passed=False)
+            FIS->>InterrogationSuccess: Publish: InterrogationFailure
+            InterrogationSuccess->>UCS: Consume: InterrogationFailure
+            UCS->>FileUploads: UPSERT: FileUpload(state=FAILED)
+        end
+    end
     UCS->>inbox: Delete File
-    UCS->>FileUploads: UPSERT: FileUpload(state=ARCHIVED)
-    Note right of UCS: UCS considers items as<br> archived once they're <br> uploaded to the <br> interrogation bucket.
-    UOS->>ResearchDataUploadBoxes: UPSERT: ResearchDataUploadBox(state=CLOSED)
-    ResearchDataUploadBoxes->>IFRS: UPSERT: ResearchDataUploadBox(state=CLOSED)
-    IFRS->>interrogation: Copy File from interrogation to permanent bucket
-    note left of IFRS: IFRS will copy each file in<br>the ResearchDataUploadBox
-    interrogation-->>archive: Copy File
-    IFRS->>FileInternallyRegistered: Publish FileInternallyRegistered
-    FileInternallyRegistered->>FIS: Consume FileInternallyRegistered
-    FIS->>FIS: Set InterrogationReport.is_archived=True
+    note right of FIS: Assume interrogation success
+    note right of UCS: Data Steward submits<br>file accession map
+    UOS->>UCS: PATCH accession map
+    rect rgb(30, 30, 30, .4)
+        loop For each file in accession map
+            UCS->>FileUploads: UPSERT: FileUpload(accession="GHGA...")
+        end
+    end
+    note right of UCS: At some point<br>UOS requests to<br>archive the box
+    UOS->>UCS: PATCH archive the box
+    rect rgb(30, 30, 30, .4)
+        loop For each file in box
+            UCS->>FileUploads: UPSERT: FileUpload(state=ARCHIVED)
+            FileUploads->>IFRS: UPSERT: FileUpload(state=ARCHIVED)
+            IFRS->>interrogation: Copy File from interrogation to permanent bucket
+            interrogation-->>permanent: Copy File
+            IFRS->>FileInternallyRegistered: Publish FileInternallyRegistered
+            FileInternallyRegistered->>FIS: Consume FileInternallyRegistered
+            FIS->>FIS: Set FileUnderInterrogation.can_remove=True
+            note right of FIS: DHFS cleanup job asynchronously<br>gets files with can_remove=True
+        end
+    end
 ```
 
 #### DHFS Cleanup Job Sequence Diagram
