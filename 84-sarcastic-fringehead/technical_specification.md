@@ -364,6 +364,8 @@ Upon startup, the HTTP API instance of the FIS will retrieve the list of Data Hu
 
 In addition to implementing the endpoints defined here, the existing functionality and config that directly interacts with Vault should be removed so that EKSS is the sole middleman for Vault activity.
 
+> See the [diagram](#example-auth-token-structure-for-dhfs-calls-to-fis-api) for an illustration of the proposed auth token structure for inbound requests to the FIS API
+
 The FIS operates an HTTP API with these endpoints:
 1. `POST /secrets`: Accept a new file secret for deposition in the EKSS
    - Authorization requires a token created with both the FIS public key and the Data Hub-specific private key
@@ -692,9 +694,10 @@ sequenceDiagram
 stateDiagram-v2
     [*] --> init: UCS - Upload initiated
     init --> inbox: UCS - Upload completed
-    inbox --> archived: DHFS report -> FIS (passed)
+    inbox --> interrogated: DHFS report -> FIS (passed)
     inbox --> failed: DHFS report -> FIS (failed)
     inbox --> cancelled: UCS - file deleted
+    interrogated --> archived: UCS approves archival request
     archived --> [*]
     failed --> [*]
     cancelled --> [*]
@@ -705,6 +708,12 @@ stateDiagram-v2
       - Transitions driven by InterrogationReport published by FIS
     end note
 ```
+
+#### Example Auth Token Structure for DHFS calls to FIS API
+> See the [FIS HTTP API](#fis-http-api) section for context.
+
+![FIS Auth Example](./images/fis_auth.png)
+
 
 ## Human Resource/Time Estimation:
 
