@@ -666,12 +666,8 @@ sequenceDiagram
 #### DHFS Cleanup Job Sequence Diagram
 ```mermaid
 sequenceDiagram
-    box rgb(0, 150, 210, 0.5) Topics
-        participant InterrogationReports
-    end
     box rgb(255, 255, 200, .5) Services
         participant FIS
-        participant DINS
         participant DHFS
     end
     box rgb(200, 75, 35, 0.5) S3 Buckets
@@ -682,9 +678,10 @@ sequenceDiagram
     interrogation-->>DHFS:
     rect rgb(30, 30, 30, .8)
         loop For each file in bucket
-            DHFS->>FIS: GET InterrogationReport
-            FIS-->>DHFS: 200 or 404
-            DHFS->>interrogation: Delete if conditions met
+            DHFS->>FIS: GET /uploads/{file_id}/can_remove
+            FIS->>FIS: Retrieve FileUnderInterrogation
+            FIS-->>DHFS: Reponse w/ value of can_remove
+            DHFS->>interrogation: Delete if True
         end
     end
 ```
@@ -705,7 +702,7 @@ stateDiagram-v2
     note left of inbox
       Source of truth:
       - State set by UCS
-      - Transitions driven by InterrogationReport published by FIS
+      - Transitions driven by InterrogationSuccess/InterrogationFailure published by FIS
     end note
 ```
 
