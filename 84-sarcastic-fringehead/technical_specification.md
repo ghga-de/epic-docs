@@ -215,7 +215,7 @@ The UCS event consumer instance subscribes to the `InterrogationSuccess` and `In
 When a new `InterrogationSuccess` or `InterrogationFailure` event arrives, UCS:
 - Finds the matching `FileUpload` in its database and raises an error if it can't.
 - Checks that the `FileUpload` has a state of `inbox`.
-  - If it doesn't (e.g. the state is already `interrogated`, `failed`, `cancelled`, or `archived`), UCS compares `FileUpload.state_updated` and `InterrogationReport.interrogated_at`.
+  - If it doesn't (e.g. the state is already `interrogated`, `failed`, `cancelled`, or `archived`), UCS compares `FileUpload.state_updated` and `InterrogationSuccess.interrogated_at`.
     - If the `InterrogationSuccess` timestamp is newer, UCS raises an error and the event is sent to the DLQ.
     - If the UCS timestamp is newer, the event is ignored and no further action is taken
 
@@ -223,7 +223,7 @@ If the event is `InterrogationSuccess`, UCS also:
 - Sets `FileUpload.state` to `interrogated`
 - Sets `secret_id`, `state_updated`, `storage_alias`, `encrypted_parts_md5`, `encrypted_parts_sha265` based on the information in the event
 
-However, if the event is `InterrogationFailure`, UCS sets `FileUpload.state` to `failed` and `FileUpload.state_updated` to `InterrogationReport.interrogated_at`
+However, if the event is `InterrogationFailure`, UCS sets `FileUpload.state` to `failed` and `FileUpload.state_updated` to `InterrogationFailure.interrogated_at`
 
 In both cases, UCS deletes the file from the `inbox` bucket. At this point, the event consumer instance is finished processing the event and waits for the next event. The updates to the `FileUpload` will be published as an outbox event.
 
@@ -232,36 +232,38 @@ As a final note on the UCS, the UCS is the place where `box_id` is populated for
 #### UCS HTTP API
 You can read about the existing UCS endpoints in the Lynx Boreal epic. I will only detail the updates here.
 
-The UCS operates the following new endpoints:
-`PATCH /boxes/{box_id}/accessions`: Accepts a payload which maps `FileUpload` IDs to accession numbers for a given `FileUploadBox`
-- Authorized by a token signed by the UOS with the work type `"map"` and including the `box_id`
-- Returns `204 NO CONTENT`
-- Description:
-  - The UCS finds the `FileUploadBox` in its database and raises an error if it can't
-  - The UCS ensures the `FileUploadBox` is locked but not archived, raising an error otherwise.
-  - Before making database writes, the UCS retrieves all specified `FileUpload` objects and:
-    - Ensures the file state is not `archived`.
-    - Ensures the file accession field is not assigned, or if it is assigned, that it matches the accession provided in the request. Otherwise, UCS raises an error and returns a `409 CONFLICT` response.
-  - The updated `FileUpload` objects are published as outbox events.
+> Note: The GET /boxes/{box_id}/uploads endpoint needs to exclude the secret_id and checksum fields
 
-`PATCH /boxes/{box_id}`: This endpoint already exists, but is augmented here to allow `FileUploadBox` *archival*.
-- Authorized by a token signed by the UOS with the work type `"archive"` and including the `box_id`
-- Returns `204 NO CONTENT`
-- Description: 
-  - The UCS finds the `FileUploadBox` in its database and raises an error if it can't.
-  - The UCS verifies that the `FileUploadBox` is locked but not archived.
-    - If archived, the UCS returns early as it assumes that the work is already done
-  	- If not locked, the UCS raises an error
-  - The UCS looks up every `FileUpload` associated with the box and verifies that each one has an assigned accession and a state of `interrogated`. If any are not set, the UCS raises an error and rejects the box archival.
-    - UCS sets each `FileUpload.state` to `archived` and likewise updates the `FileUpload.state_updated` timestamp.
-    - If every `FileUpload` already has an assigned accession and a state of `archived`, the UCS skips to updating the `FileUploadBox`.
-  - The UCS publishes an outbox event for each modified `FileUpload`.
-  - The UCS sets `FileUploadBox.archived` to True and publishes the updated object as an outbox event.
+The UCS operates the following new endpoints:
+- `PATCH /boxes/{box_id}/accessions`: Accepts a payload which maps `FileUpload` IDs to accession numbers for a given `FileUploadBox`
+  - Authorized by a token signed by the UOS with the work type `"map"` and including the `box_id`
+  - Returns `204 NO CONTENT`
+  - Description:
+    - The UCS finds the `FileUploadBox` in its database and raises an error if it can't
+    - The UCS ensures the `FileUploadBox` is locked but not archived, raising an error otherwise.
+    - Before making database writes, the UCS retrieves all specified `FileUpload` objects and:
+      - Ensures the file state is not `archived`.
+      - Ensures the file accession field is not assigned, or if it is assigned, that it matches the accession provided in the request. Otherwise, UCS raises an error and returns a `409 CONFLICT` response.
+    - The updated `FileUpload` objects are published as outbox events.
+
+- `PATCH /boxes/{box_id}`: This endpoint already exists, but is augmented here to allow `FileUploadBox` *archival*.
+  - Authorized by a token signed by the UOS with the work type `"archive"` and including the `box_id`
+  - Returns `204 NO CONTENT`
+  - Description: 
+    - The UCS finds the `FileUploadBox` in its database and raises an error if it can't.
+    - The UCS verifies that the `FileUploadBox` is locked but not archived.
+      - If archived, the UCS returns early as it assumes that the work is already done
+    	- If not locked, the UCS raises an error
+    - The UCS looks up every `FileUpload` associated with the box and verifies that each one has an assigned accession and a state of `interrogated`. If any are not set, the UCS raises an error and rejects the box archival.
+      - UCS sets each `FileUpload.state` to `archived` and likewise updates the `FileUpload.state_updated` timestamp.
+      - If every `FileUpload` already has an assigned accession and a state of `archived`, the UCS skips to updating the `FileUploadBox`.
+    - The UCS publishes an outbox event for each modified `FileUpload`.
+    - The UCS sets `FileUploadBox.archived` to True and publishes the updated object as an outbox event.
 
 Side note:  
 The work to provide a deletion endpoint accessible by GHGA Connector is *not* meant to be part of this epic. For now, assume all deletions/cancellations will be triggered from the Data Portal -> UOS -> UCS rather than from the GHGA Connector. Additionally, in case it wasn't clear, file deletions (or cancellations, rather) do not result in a `dao.delete()` call. The full document data remains, but the state is set to `cancelled`. When the GHGA Connector is enabled to perform deletions, the state might potentially be allowed to be set to `failed` in addition to `cancelled`. More thought is required here on the requirements for work order tokens, use cases, and alias vs file ID specifiers.
 
-#### UCS Config
+#### UCS Configuration
 The UCS needs the following config changes:
 - Add event sub config for `InterrogationSuccess` and `InterrogationFailure` events
   - ghga-event-schemas -> `InterrogationSuccessEventsConfig`
@@ -271,6 +273,7 @@ The UCS needs the following config changes:
 #### Work to be performed for the UCS
 - [ ] Get schema updates from ghga-event-schemas
 - [ ] Implement new endpoints
+- [ ] Exclude `secret_id` and checksum fields from `FileUpload` objects returned by `GET /boxes/{box_id}/uploads`
 - [ ] Remove existing subscription to `FileUploadReport` events
 - [ ] Add event subscriber for `InterrogationSuccess` and `InterrogationFailure` events
 - [ ] Add core behavior to handle `InterrogationSuccess` and `InterrogationFailure`
@@ -287,7 +290,7 @@ The UOS remains mostly unchanged from its initial implementation in Lynx Boreal,
 The UOS would get the following new endpoint:  
 `PATCH /boxes/{box_id}/accessions`: Accept a file-to-accession mapping in order to relay it to the UCS
 - Authorization uses auth context protocol and requires a Data Steward role
-- Request body must contain a payload conforming to the `FileAccessionMap` schema (see below)
+- Request body must contain a payload conforming to the `FileAccessionMap` [schema](#fileaccessionmap)
 - Returns `204 NO CONTENT`
 - Description:
   - UOS looks for the `ResearchDataUploadBox` in its database with an ID that matches the value in the path parameter, and returns a `404 NOT FOUND` if it doesn't find it.
@@ -297,7 +300,7 @@ The UOS would get the following new endpoint:
     - The request body contains the accession map that was supplied in the original request to the UOS.
 
 
-#### UOS Config
+#### UOS Configuration
 The UOS shouldn't need any config changes.
 
 #### Work to be performed for the UOS
@@ -311,7 +314,9 @@ The UOS shouldn't need any config changes.
 - [ ] Add the outbound UCS call to the UOS's `FileBoxClient` that uses the `"map"` type
 - [ ] Add an outbound UCS call in the `FileBoxClient` with the same structure as `lock_file_upload_box()` and `unlock_file_upload_box()`, called `archive_file_upload_box()`
 - [ ] Call `FileBoxClient.archive_file_upload_box()` from the UOS core when moving a `ResearchDataUploadBox` to `archived` state (formerly labeled `closed`).
+
 ---
+
 ### WKVS:
 - Provides the Data Hub Crypt4GH public keys via public HTTP API
 
@@ -326,13 +331,17 @@ The WKVS would get the following new endpoint:
 #### Work to be performed for the WKVS
 - [ ] Provide a way to retrieve Crypt4GH public keys for Data Hubs. This can be a dictionary where the keys are storage aliases and the values are the public keys.
 
+---
+
 ### GHGA Connector:
 The Connector performs initial file encryption and upload from the user's machine. In order to properly encrypt the file for a specific Data Hub, the Connector needs to contact the WKVS to obtain the appropriate Crypt4GH public key based on the storage alias assigned to the `ResearchDataUploadBox`/`FileUploadBox` created by the Data Steward.
 
 #### Work to be performed for the GHGA Connector
 - [ ] Fetch and use Data Hub public key for file encryption
 - [ ] Keep list of SHA-256 checksums for each unencrypted file part and submit with file part size
+
 ---
+
 ### FIS:
 The FIS straddles the border between the file services group and everything else, similar to the role played by the UOS. In the past, the FIS acted as a way to ingest file upload metadata and tell other services when a manually validated ("interrogated") file was ready for permanent storage. This had to be done as a temporary solution until the remote file upload and automatic file interrogation was implemented, which is the work proposed in this epic.
 
@@ -350,34 +359,52 @@ The FIS *also* subscribes to `FileInternallyRegistered` events from the IFRS. FI
 #### FIS HTTP API
 > [Return to API list](#restfulsynchronous)
 
+Upon startup, the HTTP API instance of the FIS will retrieve the list of Data Hub public keys from the WKVS.
+
+In addition to implementing the endpoints defined here, the existing functionality and config that directly interacts with Vault should be removed so that EKSS is the sole middleman for Vault activity.
+
 The FIS operates an HTTP API with these endpoints:
 1. `POST /secrets`: Accept a new file secret for deposition in the EKSS
-   - Authorization requires a token signed with Data Hub-specific private key
-   - Request body must contain an encrypted file secret and associated file ID
+   - Authorization requires a token created with both the FIS public key and the Data Hub-specific private key
+     - Token is should contain a sub-token encrypted with the Data Hub's private key and `storage_alias` and be encrypted with FIS public key. 
+     - FIS decrypts the outer token to learn which Data Hub public key to use to decrypt the inner token. The inner token certifies that the request was indeed sent from the given Data Hub.
+     - Inner token, signed by the Data Hub private key, contains the file ID
+   - Request body must contain the associated file ID and a file secret encrypted with the GHGA central public key
    - Returns `201 CREATED`
    - Description:
      - FIS finds the existing `FileUnderInterrogation` in its database, raising an error if it doesn't find it.
      - FIS forwards the file secret to EKSS (still encrypted) in exchange for a secret ID.
      - FIS updates the `FileUnderInterrogation` with the new secret ID.
 2. `GET /storages/{storage_alias}/uploads`: Serve a list of new file uploads (yet to be interrogated)
-   - Authorization requires a token signed with Data Hub-specific private key
+   - Authorization requires a token created with both the FIS public key and the Data Hub-specific private key
+     - Token is should contain a sub-token encrypted with the Data Hub's private key and `storage_alias` and be encrypted with FIS public key. 
+     - FIS decrypts the outer token to learn which Data Hub public key to use to decrypt the inner token. The inner token certifies that the request was indeed sent from the given Data Hub.
+     - Inner token, signed by the Data Hub private key, also contains the storage alias
    - Returns `200 OK` and a list of `FileUnderInterrogation` objects for files awaiting interrogation
    - Description:
      - FIS gets the `FileUnderInterrogation` objects which match the requested storage alias and have both `can_remove=False` and `interrogated=False`, i.e. interrogations which haven't reached a conclusion yet.
      - FIS returns the list of `FileUnderInterrogation` objects with the `secret_id` field omitted.
 3. `GET /uploads/{file_id}/can_remove`: Returns a bool indicating whether a file can be removed from the `interrogation` bucket
-   - Authorization requires a token signed with Data Hub-specific private key
+   - Authorization requires a token created with both the FIS public key and the Data Hub-specific private key
+     - Token is should contain a sub-token encrypted with the Data Hub's private key and `storage_alias` and be encrypted with FIS public key. 
+     - FIS decrypts the outer token to learn which Data Hub public key to use to decrypt the inner token. The inner token certifies that the request was indeed sent from the given Data Hub.
+     - Inner token, signed by the Data Hub private key, contains the file ID
    - Returns `200 OK` and the value of the `can_remove` field of the requested `FileUnderInterrogation`
    - Description:
      - FIS finds the existing `FileUnderInterrogation` in its database, raising an error if it doesn't find it (should be translated to True as an HTTP response but logged within the service as an error).
      - Returns the value of `FileUnderInterrogation.can_remove`
 4. `POST /interrogation-reports`: Accept an interrogation report
-   - Authorization requires a token signed with Data Hub-specific private key
+   - Authorization requires a token created with both the FIS public key and the Data Hub-specific private key
+     - Token is should contain a sub-token encrypted with the Data Hub's private key and `storage_alias` and be encrypted with FIS public key. 
+     - FIS decrypts the outer token to learn which Data Hub public key to use to decrypt the inner token. The inner token certifies that the request was indeed sent from the given Data Hub.
+     - Inner token, signed by the Data Hub private key, contains the file ID
    - Request body must contain a payload conforming to the `InterrogationReport` [schema](#interrogationreport)
    - Returns `204 NO CONTENT`
    - Description:
-     - FIS finds the matching `InterrogationReport` in its database based on the `file_id` (or raises an error).
-     - FIS updates the `InterrogationReport` with the received information and publishes this as an *outbox event*.
+     - FIS finds the matching `FileUnderInterrogation` in its database based on the `file_id` (or raises an error).
+     - If `InterrogationReport.passed` is True, FIS publishes an `InterrogationSuccess` event.
+     - If `InterrogationReport.passed` is False, FIS publishes an `InterrogationFailure` event.
+     - FIS sets both `FileUnderInterrogation.interrogated` and `FileUnderInterrogation.can_remove` to True
 
 #### FIS Configuration
 The FIS needs the following configuration:
@@ -387,24 +414,21 @@ The FIS needs the following configuration:
 - LoggingConfig
 - OpenTelemetryConfig
 - EventSubConfig:
-  - ghga-event-schemas -> FileInternallyRegisteredEventsConfig
-- OutboxPubConfig:
-  - ghga-event-schemas -> InterrogationReportEventsConfig
+  - ghga-event-schemas -> `FileUploadEventsConfig`
+  - ghga-event-schemas -> `FileInternallyRegisteredEventsConfig`
+  - ghga-event-schemas -> `InterrogationSuccessEventsConfig`
+  - ghga-event-schemas -> `InterrogationFailureEventsConfig`
 - OutboxSubConfig:
-  - ghga-event-schemas -> FileUploadEventsConfig
+  - ghga-event-schemas -> `FileUploadEventsConfig`
 - ekss_api_url
 - wkvs_api_url
 
-Upon startup, the HTTP API instance of the FIS will retrieve the list of Data Hub public keys from the WKVS.
-
-In addition, the existing functionality and config that directly interacts with Vault should be removed so that EKSS is the sole middleman for Vault activity.
-
 #### FIS Migrations
-The FIS has a persisted events collection, `fisPersistedEvents`, that contains previously published `FileInterrogationSuccessEvents` (`type_` is `"file_interrogation_success"`). These events are essentially the same as the events that will, going forward, be published by the UCS. Therefore, we *also* need to make sure the FIS can publish to the same outbox topic as the UCS. The required migration for the persisted events collection in FIS essentially needs to convert the `payload` of the stored persisted events into outbox events with the new `FileUpload` [schema](#fileupload). This migration should be reversible. FIS will only publish to the `FileUpload` outbox topic if we *republish* events from the FIS. In other words, this is historical data that we are preserving here in FIS for continuity. The historical `FileUpload` information and the local copies of new `FileUpload` objects must use different DAOs. The former should use an outbox DAO while the latter uses a regular DAO. 
+The current FIS implementation has a persisted events collection, `fisPersistedEvents`, that contains previously published `FileInterrogationSuccessEvents` (`type_` is `"file_interrogation_success"`). These events are essentially the same as the events that will, going forward, be published by the UCS upon file archival. Therefore, we *also* need to make sure the FIS can publish to the same outbox topic as the UCS. The required migration for the persisted events collection in FIS essentially needs to convert the `payload` of the stored persisted events into outbox events with the new `FileUpload` [schema](#fileupload). This migration should be reversible. FIS will only publish to the `FileUpload` outbox topic if we *republish* events from the FIS. In other words, this is historical data that we are preserving here in FIS for continuity. The historical `FileUpload` information and the local copies of new `FileUpload` objects must use different DAOs. The former should use an outbox DAO while the latter uses a regular DAO. 
 - **One alternative** is to manually exfiltrate the data to UCS.
 - **A second alternative** is to simply drop the data since the files have already been archived and all relevant information is actually stored by IFRS.
 
-There is one **problem**: IFRS has different object IDs than FIS. If we keep the event data which FIS currently has, we will need to update the information so that the file IDs in FIS are set to the file IDs (object IDs) known to IFRS, using the accession to match.
+There is one **problem**: IFRS has different object IDs than FIS. If we keep the event data which FIS currently has, we will need to update the information so that the file IDs in FIS are set to the file IDs (object IDs) known to IFRS, using the accession to match. That action would not be reversible, of course.
 
 The `ingestedFiles` collection, which contains unassociated accessions, should be dropped.
 
@@ -425,6 +449,7 @@ Finally, FIS data migration should be moved to the init container style. Instead
   - [ ] Work with DevOps to get this configured in k8s
 
 ---
+
 ### DHFS:
 The DHFS is a new service that is operated by the Data Hubs for the purpose of performing file validation and re-encryption, and to keep file ingest in general as a federated operation. The DHFS operates two instances: a client instance, which performs the interrogation work and is always running; and a cleanup instance, which runs at some interval and deletes files from the `interrogation` bucket once they've been copied to permanent storage. One crucial thing to note here is that the DHFS is not connected to an event stream, and so has no direct knowledge of the information conveyed by the events in GHGA Central's event stream. The DHFS primarily interacts with FIS's REST API in order to get that information, which is limited to only what the DHFS needs to operate.
 
@@ -438,7 +463,7 @@ It polls the FIS's HTTP API to get a list of `FileUploads` for files that have b
   - > Can be used to perform periodic integrity checks
   - > If we deviated from the GA4GH DRS Object spec for download, the GHGA Connector could verify file parts as they were downloaded, retrying parts that don't match. But that is out of scope for this epic.
 When the whole file has been re-encrypted and uploaded to the Data Hub's `interrogation` bucket, the DHFS compares the unencrypted content's SHA-256 checksum against the value obtained from the corresponding `FileUpload`. It also calculates an aggregate MD5 checksum using the individually calculated parts' MD5 checksums and compares that against the MD5 ETag calculated by S3 in the `interrogation` bucket.
-If a checksum discrepancy is found, the DHFS rejects the upload and posts an `InterrogationReport` to the FIS's HTTP API which indicates that the file did not pass inspection (`interrogation_result="failed"`). If checksums match and there are no other errors during upload, the DHFS accepts the upload and the `InterrogationReport` sent to the FIS reflects that the file passed inspection (`interrogation_result="passed"`).
+If a checksum discrepancy is found, the DHFS rejects the upload and posts an `InterrogationReport` to the FIS's HTTP API which indicates that the file did not pass inspection (`passed=False`) and provides a `reason` why the interrogation failed. If checksums match and there are no other errors during upload, the DHFS accepts the upload and the `InterrogationReport` sent to the FIS reflects that the file passed inspection (`passed=True`). The authentication mechanism for the DHFS-FIS calls is described in the [FIS HTTP API](#fis-http-api) section.
 
 #### Interrogation Process in List Format
 - [Per File]
@@ -462,7 +487,7 @@ If a checksum discrepancy is found, the DHFS rejects the upload and posts an `In
   - Sends an `InterrogationReport` to the FIS's HTTP API
 
 #### DHFS Cleanup Job (secondary instance)
-The secondary duty of the DHFS is to clean up files from the `interrogation` bucket. Files must be removed once they have been fully copied to the permanent bucket, as well as on occasions that files are deleted from their parent box. Neither the FIS, UCS, nor IFRS can perform this action because they don't have write access to the `interrogation` bucket. Each time this DHFS instance runs, it retrieves a list of all objects (files) currently in the `interrogation` bucket. Then for each file, the DHFS makes a separate GET request to the FIS API's `GET /uploads/{file_id}/can_remove` endpoint. The DHFS will *delete* the file from the `interrogation` bucket if FIS returns True.
+The secondary duty of the DHFS is to clean up files from the `interrogation` bucket. Files must be removed once they have been fully copied to the permanent bucket, as well as on occasions that files are deleted from their parent box. Neither the FIS, UCS, nor IFRS can perform this action because they don't have write access to the `interrogation` bucket. Each time this DHFS instance runs, it retrieves a list of all objects (files) currently in the `interrogation` bucket. Then for each file, the DHFS makes a separate GET request to the FIS API's `GET /uploads/{file_id}/can_remove` endpoint. For authentication, the DHFS uses its own private key to encrypt the file ID pertaining to the request, then uses the FIS public key to encrypt a token containing the Data Hub's storage alias and the encrypted file ID. The DHFS will *delete* the file from the `interrogation` bucket if FIS returns True.
 
 #### DHFS Configuration
 The DHFS needs the following configuration:
@@ -472,13 +497,15 @@ The DHFS needs the following configuration:
 - auth_token_signing_key
   - This is the Data Hub's private key, which it uses to sign auth tokens sent to FIS
 - wkvs_api_url
-  - Used to contact WKVS to get the GHGA public key
+  - Used to contact WKVS to get the GHGA central public key (alternatively this could be directly configured as fis_public_key)
+  
 ---
+
 ### IFRS:
 The role of the IFRS is to shepherd files into archival, by copying them from a Hub's `interrogation` bucket into the `permanent` bucket located at the same Data Hub. This only occurs once the Data Hub in question has completed the interrogation process, as detailed in the [DHFS section](#dhfs) above. This is the last step for a file in the Upload Path. Unlike the FIS and DHFS, the IFRS operates only as an event consumer.
 
 #### IFRS Event Consumer
-The IFRS subscribes to `FileUpload` outbox events from the UCS but only acts when it encounters an event with the state `archived`. It further validates the event using the [ArchivableFileUpload schema](#archivablefileupload). If the event represents a new, valid `FileUpload`, the IFRS copies the file from the `interrogation` bucket specified by `FileUpload.storage_alias` into the same location's `permanent` bucket. Once that is successful, the IFRS issues a `FileInternallyRegistered` event. This process is already in place within the IFRS, but some small tweaks are required. For example, the IFRS currently generates a *new* file ID when it registers a new file, meaning the same file has a different object ID. This should change so the file ID generated for a new upload in the first communication to the UCS by the GHGA Connector remains for eternity.
+The IFRS subscribes to `FileUpload` outbox events from the UCS but only acts when it encounters an event with the state `archived`. It further validates the event using the [ArchivableFileUpload schema](#archivablefileupload). If the event represents a valid `FileUpload`, IFRS first checks that it doesn't already have this file registered. If it's indeed a new upload, IFRS copies the file from the `interrogation` bucket specified by `FileUpload.storage_alias` into the same location's `permanent` bucket. Once that is successful, the IFRS issues a `FileInternallyRegistered` event. This process is already in place within the IFRS, but some small tweaks are required. For example, the IFRS currently generates a *new* file ID when it registers a new file, meaning the a file would have one object ID in what is currently the inbox bucket, and a different object ID in permanent storage. This should change so the file ID is used as the object ID and remains constant from the time it is generated in the UCS through its lifespan at GHGA.
 
 #### A note on file IDs and file accessions in the IFRS
 In the future, file accessions will not exist in the file services. For now though, we will still identify files by the file ID and/or accession number depending on the context. For example, during file upload we point to files using the file ID, but during file download a user specifies a file using the accession number. There is no mechanism external to the file services that performs that linkage in a decoupled way -- but there will be, one day! For now, the IFRS will keep the accession as the primary key for the file metadata object. In the future, the primary key will be switched to the object ID/file ID and accessions will be scrubbed from the database.
@@ -503,7 +530,11 @@ The `ifrsPersistedEvents` collection needs similar changes to the `payload` fiel
 - Delete `content_offset`.
 - Rename `encrypted_part_size` to `part_size`.
 
-IFRS data migration should be moved to the init container style. Instead of executing `run_db_migrations()` as part of every entrypoint, the migrations should be run as their own command. 
+IFRS data migration should be moved to the init container style. Instead of executing `run_db_migrations()` as part of every entrypoint, the migrations should be run as their own command.
+
+#### IFRS Configuration
+- EventSubConfig:
+  - ghga-event-schemas -> `FileUploadEventsConfig`
 
 #### Work to be performed for the IFRS
 - [ ] Add local definition for `ArchivableFileUpload`
@@ -519,17 +550,19 @@ IFRS data migration should be moved to the init container style. Instead of exec
   - [ ] Work with DevOps to get this configured in k8s
 
 ---
+
 ### DINS:
-TODO
+The Dataset Information Service (DINS) is only relevant here because it consumes `FileInternallyRegistered` events, stores that info in its database, and provides the information to public via HTTP API. DINS needs to be updated to use the new `FileInternallyRegistered` event schema. The data in the database already uses different field names, so no migration should be necessary.
 
 #### Work to be performed for the DINS
-- [ ] Get the updated `ghga-event-schemas` version and adapt DINS for changes to `FileInternallyRegistered`. This should not require a DB migration because the fields in the DB are already named differently from their counterparts in the schema itself.
+- [ ] Get the updated `ghga-event-schemas` version and adapt DINS for changes to `FileInternallyRegistered`. 
+
+---
 
 ### DCS:
-The DCS subscribes to `FileInternallyRegistered` events from the IFRS to learn about which files are available for download from the Archive. The changes in that event schema, which are described above in the [IFRS section](#ifrs), necessitate database migrations and code updates in the DCS.
+The DCS subscribes to `FileInternallyRegistered` events from the IFRS to learn about which files are available for download from GHGA. The changes in that event schema, which are described above in the [schema definition](#fileinternallyregistered) above, necessitate database migrations and code updates in the DCS.
 
 #### Migrating existing DCS data
-
 Similar to the IFRS, the DCS should get a new, temporary database collection to preserve the connection between file accession and file ID. This must be done before any of the following changes. Please note that "temporary" here does not mean the table should be dropped at the end of the migration, but that it will be made obsolete and removed after some future development.
 
 The `drs_objects` collection needs the following migration applied:
