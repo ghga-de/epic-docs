@@ -205,6 +205,7 @@ class FileAccessionMap(BaseModel):
 - Rename `FileInterrogationFailureEventsConfig` to `InterrogationFailureEventsConfig`
 - Remove the `FileUploadReport` schema
 - Remove the `FileUploadReportEventsConfig` stateless config class
+- Rename `NonStagedFileRequested.s3_endpoint_alias` to `storage_alias`
 
 ### UCS:
 The UCS takes on an expanded role from what was defined in Lynx Boreal. Previously, the UCS was only concerned with getting files into the `inbox` bucket, and after that it didn't care what happened. However, further consideration has resulted in the viewpoint that the UCS is actually the source of truth for files all the way up until they are copied into permanent storage. Intermediate steps that occur in other services provide subsequent information to the UCS regarding the `FileUpload`, but those services do not assume ownership of the essential file information. Not only that, but the relationship between `FileUpload` IDs and accession numbers should and will be managed by the UCS during the interim phase while official accession management is still under development. The UCS operates two instances - an HTTP API and an event consumer.
@@ -563,22 +564,15 @@ The Dataset Information Service (DINS) is only relevant here because it consumes
 The DCS subscribes to `FileInternallyRegistered` events from the IFRS to learn about which files are available for download from GHGA. The changes in that event schema, which are described above in the [schema definition](#fileinternallyregistered) above, necessitate database migrations and code updates in the DCS.
 
 #### Migrating existing DCS data
-Similar to the IFRS, the DCS should get a new, temporary database collection to preserve the connection between file accession and file ID. This must be done before any of the following changes. Please note that "temporary" here does not mean the table should be dropped at the end of the migration, but that it will be made obsolete and removed after some future development.
-
-The `drs_objects` collection needs the following migration applied:
-- Replace the value of `_id` with the value from `object_id`.
-- Delete `object_id`.
+The `drs_objects` collection needs the following migration changes applied:
 - Rename `decryption_secret_id` to `secret_id`.
 - Rename `s3_endpoint_alias` to `storage_alias`.
 
 The `dcsPersistedEvents` collection needs the following changes to the `payload` field:
 - Where `type_` == `drs_object_served`:
-  - Replace the value for `file_id` with the value from `target_object_id`
-  - **QUESTION**: *Should we update the actual schema so `s3_endpoint_alias` becomes `storage_alias`?*
+  - Rename `s3_endpoint_alias` to `storage_alias`.
 - Where `type_` == `drs_object_registered`:
-  - Replace the value (presently accession) for `file_id` with the corresponding UUID4 value from the temporary table defined above.
-  - `drs_uri` remains untouched...for now.
-    - It's not clear how this will be constructed in the future, but the DCS should only be concerned with files and file IDs rather than file accessions from metadata.
+  - Do nothing. There are no active consumers for this event.
 
 Another note about the DCS migrations is that they should be moved to the init container style. Instead of executing `run_db_migrations()` as part of every entrypoint, the migrations should be run as their own command. 
 
