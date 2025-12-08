@@ -120,7 +120,7 @@ reason: str
 ```python
 # content_offset is removed because objects are stored without an envelope
 # bucket_id is removed because storage_alias should already point to specific bucket
-accession: str  # Renamed from file_id - will migrate & replace with object IDs (FileUpload.id) once official accession provider is implemented. This field is still the object's primary identifier for now.
+file_id: str  # For now, this field continues to hold the accession, despite the name. In the future, the plan is to replace all values in this field with the value from object_id. We will have to simply be aware for the interim that, although `file_id` refers to `FileUpload.id` in the rest of the spec, the naming here is an unfortunate collision with existing implementation. This field is still the object's primary identifier for now. An alternative solution is to rename this field to 'accession' during the immediate work, then migrate the name back to 'file_id' once official accession management is implemented.
 object_id: UUID4  # unchanged -- see note above
 upload_date: UTCDatetime  # unchanged
 storage_alias: str  # renamed from s3_endpoint_alias
