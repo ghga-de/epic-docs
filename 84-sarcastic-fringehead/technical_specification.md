@@ -7,7 +7,7 @@ Epic planning and implementation follow the
 ## Scope
 ### Outline:
 This epic includes all work required to bring the remaining file services into line with the new file upload concept. The first portion of work for the file services was executed under [Lynx Boreal](../76-lynx-boreal/technical_specification.md), and there was also a subsequent portion of work for the GHGA Connector which was carried out according to [Hedgehog Seahorse](../80-hedgehog-seahorse/technical_specification.md). When this epic is finished, all *backend* modifications required for the new upload concept to be realized will be complete. Frontend changes are *not* included in this epic, however, so more work will be required to bring the Data Portal up to speed.
-As for the work to be completed within this epic, the services affected include the File Ingest Service (FIS), Internal File Registry Service (IFRS), the Well-Known Value Service (WKVS), the Upload Controller Service (UCS), the ghga-event-schemas library, and a new service called the Data Hub File Service (DHFS). Additionally, if it is discovered during implementation that further changes need to be made to other services *beyond what is described in this epic*, then tickets will be added ad-hoc and associated with this epic.
+As for the work to be completed within this epic, the services affected include the File Ingest Service (FIS), Encrypted Key Store Service (EKSS), Internal File Registry Service (IFRS), the Well-Known Value Service (WKVS), the Upload Controller Service (UCS), the ghga-event-schemas library, and a new service called the Data Hub File Service (DHFS). Additionally, if it is discovered during implementation that further changes need to be made to other services *beyond what is described in this epic*, then tickets will be added ad-hoc and associated with this epic.
 
 In Lynx Boreal, the UCS was rewritten, the Upload Orchestration Service (UOS) was implemented for the first time, the Claims Repository Service (CRS) was updated to manage permissions for Research Data Upload Boxes, and the Work Package Service (WPS) was updated to manage upload-type work packages. Taken together, these changes create the operational framework for remote file upload, but only to the point of initial ingest. In order to fully realize our file upload concept, we still need to decrypt the uploaded file, verify the integrity via checksum comparison, re-encrypt the file with a new file secret (securely stored in the Encryption Key Store Service, or EKSS), and move the file to a permanent storage bucket registered with the IFRS in what we call "archival".
 
@@ -31,6 +31,7 @@ All user journeys are already detailed in Lynx Boreal. The operations added in t
 [UCS HTTP API](#ucs-http-api)  
 [UOS HTTP API](#uos-http-api)  
 [WKVS HTTP API](#wkvs-http-api)  
+[EKSS HTTP API](#ekss-http-api)
 [FIS HTTP API](#fis-http-api)  
 
 ### Payload Schemas for Events:
@@ -351,6 +352,26 @@ Per-part encryption process needs to be updated to the following:
 
 ---
 
+### EKSS:
+
+The EKSS is responsible for interfacing with Vault to deposit and retrieve secrets. Before the introduction of this epic, there were *two* services that directly communicated with Vault: EKSS and FIS. The changes proposed here would make EKSS the sole service with Vault access.
+
+Only small changes are required for EKSS, namely with expected format of ingested secrets. In the past, EKSS expected a full Crypt4GH envelope. Going forward, however, EKSS will expect a secret directly encrypted with the GHGA public key. Because the EKSS API is not publicly exposed, we do not need to perform extra verification of the sender. The reason for the move away from the envelope is that the research data files aren't stored with a Crypt4GH envelope when they rest in the `interrogation` or `permanent` buckets, and so DHFS won't generate an envelope when it creates the new file encryption secret. Therefore, creating the envelope just to discard it doesn't serve a purpose.
+
+#### EKSS HTTP API
+> [Return to API list](#restfulsynchronous)
+
+The `POST /secrets` endpoint will be updated to work as described here:
+- No special authentication token is required because the API is only internally accessible.
+- Request body must include a file encryption secret encrypted with the GHGA public key (or the public key configured for the EKSS, if a distinction is made).
+- EKSS decrypts the file secret and stores it in Vault using `vault.store_secret()`.
+- EKSS returns a `201 CREATED` response containing the Vault ID of the deposited secret.
+
+#### Work to be performed for the EKSS
+- [ ] Rewrite `post_encryption_secret()` to work as described above
+
+---
+
 ### FIS:
 The FIS straddles the border between the file services group and everything else, similar to the role played by the UOS. In the past, the FIS acted as a way to ingest file upload metadata and tell other services when a manually validated ("interrogated") file was ready for permanent storage. This had to be done as a temporary solution until the remote file upload and automatic file interrogation was implemented, which is the work proposed in this epic.
 
@@ -380,10 +401,12 @@ The FIS operates an HTTP API with these endpoints:
      - The inner layer contains the file ID and is encrypted with the Data Hub's private key
      - The outer layer contains the `storage_alias` in addition to the inner layer described above, and is encrypted with FIS public key. 
      - FIS decrypts the outer token layer with its private key to learn which Data Hub public key to use to decrypt the inner layer. The inner layer certifies that the request was indeed sent from the given Data Hub.
-   - Request body must contain the associated file ID and a file secret encrypted with the GHGA central public key
+   - Request body must contain the associated file ID and a file secret encrypted with the GHGA central public key (or FIS public key, if a distinction is made).
    - Returns `201 CREATED`
    - Description:
      - FIS finds the existing `FileUnderInterrogation` in its database, raising an error if it doesn't find it.
+     - FIS decrypts the secret and re-encrypts it with the GHGA public key *if* the FIS does not already use the same public key. 
+       - If file services generally use the same Crypt4GH public key, then there is no reason for the FIS to perform this step.
      - FIS forwards the file secret to EKSS (still encrypted) in exchange for a secret ID.
      - FIS updates the `FileUnderInterrogation` with the new secret ID.
 2. `GET /storages/{storage_alias}/uploads`: Serve a list of new file uploads (yet to be interrogated)
