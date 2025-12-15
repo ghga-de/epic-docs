@@ -295,7 +295,7 @@ The UOS would get the following new endpoint:
 - Returns `204 NO CONTENT`
 - Description:
   - UOS looks for the `ResearchDataUploadBox` in its database with an ID that matches the value in the path parameter, and returns a `404 NOT FOUND` if it doesn't find it.
-  - UOS ensures the `ResearchDataUploadBox` is not already CLOSED, and raises an error if it is. This might return a `409 CONFLICT` status code.
+  - UOS ensures the `ResearchDataUploadBox` is not already ARCHIVED, and raises an error if it is. This might return a `409 CONFLICT` status code.
   - UOS self-signs a `ChangeFileBoxWorkOrder` token and makes a PATCH request to the UCS's `/boxes/{box_id}/accessions` endpoint.
     - The UOS uses `ResearchDataUploadBox.file_upload_box_id` for the `box_id` parameter in both the token and UCS call.
     - The request body contains the accession map that was supplied in the original request to the UOS.
@@ -551,7 +551,7 @@ IFRS data migration should be moved to the init container style. Instead of exec
 - [ ] Add local definition for `ArchivableFileUpload`
 - [ ] Add event subscriber for `InterrogationReport` events
 - [ ] Add outbox subscriber for `ResearchDataUploadBox` events
-- [ ] Upon encountering a closed `ResearchDataUploadBox`, retrieve the list of relevant files from the local store of `InterrogationReport` events
+- [ ] Upon encountering an ARCHIVED `ResearchDataUploadBox`, retrieve the list of relevant files from the local store of `InterrogationReport` events
 - [ ] Copy each file from the `interrogation` bucket to the IFRS's permanent bucket
 - [ ] Get the updated `ghga-event-schemas` version and adapt IFRS for changes to `FileInternallyRegistered`
 - [ ] Migrate existing data in the `file_metadata` collection
