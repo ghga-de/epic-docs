@@ -375,10 +375,10 @@ In addition to implementing the endpoints defined here, the existing functionali
 
 The FIS operates an HTTP API with these endpoints:
 1. `POST /secrets`: Accept a new file secret for deposition in the EKSS
-   - Authorization requires a token created with both the FIS public key and the Data Hub-specific private key
-     - Token should contain a sub-token encrypted with the Data Hub's private key and `storage_alias` and be encrypted with FIS public key. 
-     - FIS decrypts the outer token to learn which Data Hub public key to use to decrypt the inner token. The inner token certifies that the request was indeed sent from the given Data Hub.
-     - Inner token, signed by the Data Hub private key, contains the file ID
+   - Authorization requires a 2-layer token created with both the FIS public key and the Data Hub-specific private key:
+     - The inner layer contains the file ID and is encrypted with the Data Hub's private key
+     - The outer layer contains the `storage_alias` in addition to the inner layer described above, and is encrypted with FIS public key. 
+     - FIS decrypts the outer token layer with its private key to learn which Data Hub public key to use to decrypt the inner layer. The inner layer certifies that the request was indeed sent from the given Data Hub.
    - Request body must contain the associated file ID and a file secret encrypted with the GHGA central public key
    - Returns `201 CREATED`
    - Description:
@@ -386,28 +386,28 @@ The FIS operates an HTTP API with these endpoints:
      - FIS forwards the file secret to EKSS (still encrypted) in exchange for a secret ID.
      - FIS updates the `FileUnderInterrogation` with the new secret ID.
 2. `GET /storages/{storage_alias}/uploads`: Serve a list of new file uploads (yet to be interrogated)
-   - Authorization requires a token created with both the FIS public key and the Data Hub-specific private key
-     - Token should contain a sub-token encrypted with the Data Hub's private key and `storage_alias` and be encrypted with FIS public key. 
-     - FIS decrypts the outer token to learn which Data Hub public key to use to decrypt the inner token. The inner token certifies that the request was indeed sent from the given Data Hub.
-     - Inner token, signed by the Data Hub private key, also contains the storage alias
+   - Authorization requires a 2-layer token created with both the FIS public key and the Data Hub-specific private key:
+     - The inner layer contains the `storage_alias` and is encrypted with the Data Hub's private key.
+     - The outer layer *also* contains the `storage_alias` in addition to the inner layer described above, and is encrypted with FIS public key.
+     - FIS decrypts the outer token layer with its private key to learn which Data Hub public key to use to decrypt the inner layer. The inner layer certifies that the request was indeed sent from the given Data Hub.
    - Returns `200 OK` and a list of `FileUnderInterrogation` objects for files awaiting interrogation
    - Description:
      - FIS gets the `FileUnderInterrogation` objects which match the requested storage alias and have both `can_remove=False` and `interrogated=False`, i.e. interrogations which haven't reached a conclusion yet.
      - FIS returns the list of `FileUnderInterrogation` objects with the `secret_id` field omitted.
 3. `GET /uploads/{file_id}/can_remove`: Returns a bool indicating whether a file can be removed from the `interrogation` bucket
-   - Authorization requires a token created with both the FIS public key and the Data Hub-specific private key
-     - Token should contain a sub-token encrypted with the Data Hub's private key and `storage_alias` and be encrypted with FIS public key. 
-     - FIS decrypts the outer token to learn which Data Hub public key to use to decrypt the inner token. The inner token certifies that the request was indeed sent from the given Data Hub.
-     - Inner token, signed by the Data Hub private key, contains the file ID
+   - Authorization requires a 2-layer token created with both the FIS public key and the Data Hub-specific private key:
+     - The inner layer contains the file ID and is encrypted with the Data Hub's private key
+     - The outer layer contains the `storage_alias` in addition to the inner layer described above, and is encrypted with FIS public key. 
+     - FIS decrypts the outer token layer with its private key to learn which Data Hub public key to use to decrypt the inner layer. The inner layer certifies that the request was indeed sent from the given Data Hub.
    - Returns `200 OK` and the value of the `can_remove` field of the requested `FileUnderInterrogation`
    - Description:
      - FIS finds the existing `FileUnderInterrogation` in its database, raising an error if it doesn't find it (should be translated to True as an HTTP response but logged within the service as an error).
      - Returns the value of `FileUnderInterrogation.can_remove`
 4. `POST /interrogation-reports`: Accept an interrogation report
-   - Authorization requires a token created with both the FIS public key and the Data Hub-specific private key
-     - Token should contain a sub-token encrypted with the Data Hub's private key and `storage_alias` and be encrypted with FIS public key. 
-     - FIS decrypts the outer token to learn which Data Hub public key to use to decrypt the inner token. The inner token certifies that the request was indeed sent from the given Data Hub.
-     - Inner token, signed by the Data Hub private key, contains the file ID
+   - Authorization requires a 2-layer token created with both the FIS public key and the Data Hub-specific private key:
+     - The inner layer contains the file ID and is encrypted with the Data Hub's private key
+     - The outer layer contains the `storage_alias` in addition to the inner layer described above, and is encrypted with FIS public key. 
+     - FIS decrypts the outer token layer with its private key to learn which Data Hub public key to use to decrypt the inner layer. The inner layer certifies that the request was indeed sent from the given Data Hub.
    - Request body must contain a payload conforming to the `InterrogationReport` [schema](#interrogationreport)
    - Returns `204 NO CONTENT`
    - Description:
