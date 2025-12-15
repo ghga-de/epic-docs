@@ -218,7 +218,8 @@ When a new `InterrogationSuccess` or `InterrogationFailure` event arrives, UCS:
 - Checks that the `FileUpload` has a state of `inbox`.
   - If it doesn't (e.g. the state is already `interrogated`, `failed`, `cancelled`, or `archived`), UCS compares `FileUpload.state_updated` and `InterrogationSuccess.interrogated_at`.
     - If the `InterrogationSuccess` timestamp is newer, UCS raises an error and the event is sent to the DLQ.
-    - If the UCS timestamp is newer, the event is ignored and no further action is taken
+    - If the UCS timestamp is newer, the event is ignored and no further action is taken.
+    - If the timestamps are the same, the UCS verifies if there is a difference in the information. In the case that the information is the same, the UCS stops processing. If there is a difference, the UCS processes the event (this could happen if, for example, we carry out a data fix and want to re-process the events with the fixed state).
 
 If the event is `InterrogationSuccess`, UCS also:
 - Sets `FileUpload.state` to `interrogated`
