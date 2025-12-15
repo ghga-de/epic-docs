@@ -337,16 +337,23 @@ The WKVS would get the following new endpoint:
 ### GHGA Connector:
 The Connector performs initial file encryption and upload from the user's machine. In order to properly encrypt the file for a specific Data Hub, the Connector needs to contact the WKVS to obtain the appropriate Crypt4GH public key based on the storage alias assigned to the `ResearchDataUploadBox`/`FileUploadBox` created by the Data Steward.
 
+Per-part encryption process needs to be updated to the following:
+1. Update the unencrypted content SHA-256 checksum
+2. Encrypt the part and calculate the MD5 & SHA-256 checksums of the encrypted part
+3. Decrypt the part and update the second unencrypted content SHA-256 checksum
+4. Compare the decrypted checksums to make sure they're the same at each step in the process.
+
 #### Work to be performed for the GHGA Connector
 - [ ] Fetch and use Data Hub public key for file encryption
-- [ ] Keep list of SHA-256 checksums for each unencrypted file part and submit with file part size
+- [ ] Submit file part size
+- [ ] Make sure we decrypt encrypted parts again and calculate a second, confirmatory checksum over the unencrypted content.
 
 ---
 
 ### FIS:
 The FIS straddles the border between the file services group and everything else, similar to the role played by the UOS. In the past, the FIS acted as a way to ingest file upload metadata and tell other services when a manually validated ("interrogated") file was ready for permanent storage. This had to be done as a temporary solution until the remote file upload and automatic file interrogation was implemented, which is the work proposed in this epic.
 
-The new role of the FIS is to inform the DHFS when new files arrive in the DHFS's `inbox` bucket, as well as to inform other services of the results of DHFS's interrogation procedure by publishing the result as a persistent event adhering to either the [InterrogationSuccess](#interrogationsuccess) or [InterrogationFailure](#interrogationfailure) schema. To do this, the FIS operates as an event consumer in one instance, and runs an HTTP API in another instance. Both instances are described below.
+The new role of the FIS is to inform the DHFS when new files arrive in the DHFS's `inbox` bucket. To do this, the FIS operates as an event consumer in one instance, and runs an HTTP API in another instance. Both instances are described below.
 
 #### FIS Event Consumer
 The FIS subscribes to `FileUpload` *outbox events* from the UCS.
@@ -482,9 +489,10 @@ If a checksum discrepancy is found, the DHFS rejects the upload and posts an `In
   - Streams the object from the Data Hub's `inbox` bucket part-by-part using the same part size as found in `FileUpload.part_size`
   - [Per File Part]
     - Decrypts the part
-    - Updates the SHA-256 checksum over the unencrypted content
     - Re-encrypts the part using the newly generated file secret
     - Calculates the MD5 and SHA-256 checksums over the encrypted file part and appends each to their respective lists
+    - Decrypts the re-encrypted content again
+    - Updates the SHA-256 checksum over this re-decrypted content
     - Uploads the re-encrypted part to the Data Hub's `interrogation` bucket
   - Compares the unencrypted file's SHA-256 checksum against the one reported by the submitter during upload (found in `FileUpload.decrypted_sha256`), and the encrypted checksum against the one calculated by S3
   - Sends an `InterrogationReport` to the FIS's HTTP API
