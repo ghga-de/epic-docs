@@ -376,7 +376,7 @@ In addition to implementing the endpoints defined here, the existing functionali
 The FIS operates an HTTP API with these endpoints:
 1. `POST /secrets`: Accept a new file secret for deposition in the EKSS
    - Authorization requires a token created with both the FIS public key and the Data Hub-specific private key
-     - Token is should contain a sub-token encrypted with the Data Hub's private key and `storage_alias` and be encrypted with FIS public key. 
+     - Token should contain a sub-token encrypted with the Data Hub's private key and `storage_alias` and be encrypted with FIS public key. 
      - FIS decrypts the outer token to learn which Data Hub public key to use to decrypt the inner token. The inner token certifies that the request was indeed sent from the given Data Hub.
      - Inner token, signed by the Data Hub private key, contains the file ID
    - Request body must contain the associated file ID and a file secret encrypted with the GHGA central public key
@@ -387,7 +387,7 @@ The FIS operates an HTTP API with these endpoints:
      - FIS updates the `FileUnderInterrogation` with the new secret ID.
 2. `GET /storages/{storage_alias}/uploads`: Serve a list of new file uploads (yet to be interrogated)
    - Authorization requires a token created with both the FIS public key and the Data Hub-specific private key
-     - Token is should contain a sub-token encrypted with the Data Hub's private key and `storage_alias` and be encrypted with FIS public key. 
+     - Token should contain a sub-token encrypted with the Data Hub's private key and `storage_alias` and be encrypted with FIS public key. 
      - FIS decrypts the outer token to learn which Data Hub public key to use to decrypt the inner token. The inner token certifies that the request was indeed sent from the given Data Hub.
      - Inner token, signed by the Data Hub private key, also contains the storage alias
    - Returns `200 OK` and a list of `FileUnderInterrogation` objects for files awaiting interrogation
@@ -396,7 +396,7 @@ The FIS operates an HTTP API with these endpoints:
      - FIS returns the list of `FileUnderInterrogation` objects with the `secret_id` field omitted.
 3. `GET /uploads/{file_id}/can_remove`: Returns a bool indicating whether a file can be removed from the `interrogation` bucket
    - Authorization requires a token created with both the FIS public key and the Data Hub-specific private key
-     - Token is should contain a sub-token encrypted with the Data Hub's private key and `storage_alias` and be encrypted with FIS public key. 
+     - Token should contain a sub-token encrypted with the Data Hub's private key and `storage_alias` and be encrypted with FIS public key. 
      - FIS decrypts the outer token to learn which Data Hub public key to use to decrypt the inner token. The inner token certifies that the request was indeed sent from the given Data Hub.
      - Inner token, signed by the Data Hub private key, contains the file ID
    - Returns `200 OK` and the value of the `can_remove` field of the requested `FileUnderInterrogation`
@@ -405,7 +405,7 @@ The FIS operates an HTTP API with these endpoints:
      - Returns the value of `FileUnderInterrogation.can_remove`
 4. `POST /interrogation-reports`: Accept an interrogation report
    - Authorization requires a token created with both the FIS public key and the Data Hub-specific private key
-     - Token is should contain a sub-token encrypted with the Data Hub's private key and `storage_alias` and be encrypted with FIS public key. 
+     - Token should contain a sub-token encrypted with the Data Hub's private key and `storage_alias` and be encrypted with FIS public key. 
      - FIS decrypts the outer token to learn which Data Hub public key to use to decrypt the inner token. The inner token certifies that the request was indeed sent from the given Data Hub.
      - Inner token, signed by the Data Hub private key, contains the file ID
    - Request body must contain a payload conforming to the `InterrogationReport` [schema](#interrogationreport)
