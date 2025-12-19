@@ -31,7 +31,7 @@ All user journeys are already detailed in Lynx Boreal. The operations added in t
 [UCS HTTP API](#ucs-http-api)  
 [UOS HTTP API](#uos-http-api)  
 [WKVS HTTP API](#wkvs-http-api)  
-[EKSS HTTP API](#ekss-http-api)
+[EKSS HTTP API](#ekss-http-api)  
 [FIS HTTP API](#fis-http-api)  
 
 ### Payload Schemas for Events:
@@ -161,6 +161,7 @@ class InterrogationReport(BaseModel):
     storage_alias: str  # The storage alias for the interrogation bucket
     interrogated_at: UTCDatetime # Timestamp showing when interrogation finished
     passed: bool
+    secret: bytes | None = None  # Encrypted file encryption secret
     encrypted_parts_md5: list[str] | None = None  # Conditional upon success
     encrypted_parts_sha256: list[str] | None = None  # Conditional upon success
     reason: str | None = None  # Conditional upon failure, contains reason for failure
@@ -396,20 +397,7 @@ In addition to implementing the endpoints defined here, the existing functionali
 > See the [diagram](#example-auth-token-structure-for-dhfs-calls-to-fis-api) for an illustration of the proposed auth token structure for inbound requests to the FIS API
 
 The FIS operates an HTTP API with these endpoints:
-1. `POST /secrets`: Accept a new file secret for deposition in the EKSS
-   - Authorization requires a 2-layer token created with both the FIS public key and the Data Hub-specific private key:
-     - The inner layer contains the file ID and is encrypted with the Data Hub's private key
-     - The outer layer contains the `storage_alias` in addition to the inner layer described above, and is encrypted with FIS public key. 
-     - FIS decrypts the outer token layer with its private key to learn which Data Hub public key to use to decrypt the inner layer. The inner layer certifies that the request was indeed sent from the given Data Hub.
-   - Request body must contain the associated file ID and a file secret encrypted with the GHGA central public key (or FIS public key, if a distinction is made).
-   - Returns `201 CREATED`
-   - Description:
-     - FIS finds the existing `FileUnderInterrogation` in its database, raising an error if it doesn't find it.
-     - FIS decrypts the secret and re-encrypts it with the GHGA public key *if* the FIS does not already use the same public key. 
-       - If file services generally use the same Crypt4GH public key, then there is no reason for the FIS to perform this step.
-     - FIS forwards the file secret to EKSS (still encrypted) in exchange for a secret ID.
-     - FIS updates the `FileUnderInterrogation` with the new secret ID.
-2. `GET /storages/{storage_alias}/uploads`: Serve a list of new file uploads (yet to be interrogated)
+1. `GET /storages/{storage_alias}/uploads`: Serve a list of new file uploads (yet to be interrogated)
    - Authorization requires a 2-layer token created with both the FIS public key and the Data Hub-specific private key:
      - The inner layer contains the `storage_alias` and is encrypted with the Data Hub's private key.
      - The outer layer *also* contains the `storage_alias` in addition to the inner layer described above, and is encrypted with FIS public key.
@@ -418,7 +406,7 @@ The FIS operates an HTTP API with these endpoints:
    - Description:
      - FIS gets the `FileUnderInterrogation` objects which match the requested storage alias and have both `can_remove=False` and `interrogated=False`, i.e. interrogations which haven't reached a conclusion yet.
      - FIS returns the list of `FileUnderInterrogation` objects with the `secret_id` field omitted.
-3. `GET /uploads/{file_id}/can_remove`: Returns a bool indicating whether a file can be removed from the `interrogation` bucket
+2. `GET /storages/{storage_alias}/uploads/{file_id}/can_remove`: Returns a bool indicating whether a file can be removed from the `interrogation` bucket
    - Authorization requires a 2-layer token created with both the FIS public key and the Data Hub-specific private key:
      - The inner layer contains the file ID and is encrypted with the Data Hub's private key
      - The outer layer contains the `storage_alias` in addition to the inner layer described above, and is encrypted with FIS public key. 
@@ -427,7 +415,7 @@ The FIS operates an HTTP API with these endpoints:
    - Description:
      - FIS finds the existing `FileUnderInterrogation` in its database, raising an error if it doesn't find it (should be translated to True as an HTTP response but logged within the service as an error).
      - Returns the value of `FileUnderInterrogation.can_remove`
-4. `POST /interrogation-reports`: Accept an interrogation report
+3. `POST /interrogation-reports`: Accept an interrogation report
    - Authorization requires a 2-layer token created with both the FIS public key and the Data Hub-specific private key:
      - The inner layer contains the file ID and is encrypted with the Data Hub's private key
      - The outer layer contains the `storage_alias` in addition to the inner layer described above, and is encrypted with FIS public key. 
@@ -436,7 +424,10 @@ The FIS operates an HTTP API with these endpoints:
    - Returns `204 NO CONTENT`
    - Description:
      - FIS finds the matching `FileUnderInterrogation` in its database based on the `file_id` (or raises an error).
-     - If `InterrogationReport.passed` is True, FIS publishes an `InterrogationSuccess` event.
+     - If `InterrogationReport.passed` is True, FIS:
+       - Sends the encrypted `InterrogationReport.secret` to the EKSS.
+       - Updates `FileUnderInterrogation.secret_id` with the value obtained from EKSS.
+       - Publishes an `InterrogationSuccess` event.
      - If `InterrogationReport.passed` is False, FIS publishes an `InterrogationFailure` event.
      - FIS sets both `FileUnderInterrogation.interrogated` and `FileUnderInterrogation.can_remove` to True
 
@@ -520,6 +511,7 @@ If a checksum discrepancy is found, the DHFS rejects the upload and posts an `In
     - Uploads the re-encrypted part to the Data Hub's `interrogation` bucket
   - Compares the unencrypted file's SHA-256 checksum against the one reported by the submitter during upload (found in `FileUpload.decrypted_sha256`), and the encrypted checksum against the one calculated by S3
   - Sends an `InterrogationReport` to the FIS's HTTP API
+    - In the successful case, the `InterrogationReport` includes the new file encryption secret encrypted with the GHGA public key.
 
 #### DHFS Cleanup Job (secondary instance)
 The secondary duty of the DHFS is to clean up files from the `interrogation` bucket. Files must be removed once they have been fully copied to the permanent bucket, as well as on occasions that files are deleted from their parent box. Neither the FIS, UCS, nor IFRS can perform this action because they don't have write access to the `interrogation` bucket. Each time this DHFS instance runs, it retrieves a list of all objects (files) currently in the `interrogation` bucket. Then for each file, the DHFS makes a separate GET request to the FIS API's `GET /uploads/{file_id}/can_remove` endpoint. For authentication, the DHFS uses its own private key to encrypt the file ID pertaining to the request, then uses the FIS public key to encrypt a token containing the Data Hub's storage alias and the encrypted file ID. The DHFS will *delete* the file from the `interrogation` bucket if FIS returns True.
@@ -533,7 +525,6 @@ The DHFS needs the following configuration:
   - This is the Data Hub's private key, which it uses to sign auth tokens sent to FIS
 - wkvs_api_url
   - Used to contact WKVS to get the GHGA central public key (alternatively this could be directly configured as fis_public_key)
-  
 ---
 
 ### IFRS:
