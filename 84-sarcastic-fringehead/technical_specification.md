@@ -81,7 +81,7 @@ ARCHIVED = "archived"  # now means the file is officially in permanent storage
 > Outbox event owned by UCS
 ```python
 id: UUID4       # Unique identifier for the file upload
-box_id: UUID4   # The ID of the FileUploadBox this FileUpload belongs to
+box_id: UUID4   # The ID of the FileUploadBox this FileUpload belongs to. There should be a compound unique index on this field and alias.
 alias: str      # The submitted alias from the metadata (unique within the box)
 state: FileUploadState = "init"  # The state of the FileUpload
 state_updated: UTCDatetime  # Timestamp of when state was updated
@@ -93,7 +93,7 @@ decrypted_size: int     # The size of the unencrypted file
 part_size: int  # The number of bytes in each file part (last part is likely smaller)
 encrypted_parts_md5: list[str] | None     # Is None until DHFS finishes with file
 encrypted_parts_sha256: list[str] | None  # Is None until DHFS finishes with file
-accession: str | None   # The accession number for the file
+accession: str | None   # The accession number for the file. This field should have a unique index placed on it.
 ```
 
 #### InterrogationSuccess
@@ -161,7 +161,7 @@ class InterrogationReport(BaseModel):
     storage_alias: str  # The storage alias for the interrogation bucket
     interrogated_at: UTCDatetime # Timestamp showing when interrogation finished
     passed: bool
-    secret: bytes | None = None  # Encrypted file encryption secret
+    secret: SecretBytes | None = None  # Encrypted file encryption secret
     encrypted_parts_md5: list[str] | None = None  # Conditional upon success
     encrypted_parts_sha256: list[str] | None = None  # Conditional upon success
     reason: str | None = None  # Conditional upon failure, contains reason for failure
@@ -648,7 +648,6 @@ sequenceDiagram
     DHFS->>inbox: Fetch first file chunk to get envelope
     DHFS->>DHFS: Decrypt envelope with private key
     DHFS->>DHFS: Generate new file secret
-    DHFS->>FIS: Submit new file secret (encrypted)
     FIS->>EKSS: Submit secret
     EKSS-->>FIS: Secret ID
     DHFS->>interrogation: Initiate multipart upload
@@ -658,6 +657,7 @@ sequenceDiagram
             inbox->>DHFS: Stream file chunk
             DHFS->>DHFS: Decrypt with old secret
             DHFS->>DHFS: Re-encrypt with new secret
+            DHFS->>DHFS: Decrypt the re-encrypted data
             DHFS->>DHFS: Update checksums
             DHFS->>interrogation: Upload file chunk
         end
