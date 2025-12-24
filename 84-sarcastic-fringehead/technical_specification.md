@@ -407,13 +407,15 @@ The FIS operates an HTTP API with these endpoints:
    - Description:
      - FIS gets the `FileUnderInterrogation` objects which match the requested storage alias and have both `can_remove=False` and `interrogated=False`, i.e. interrogations which haven't reached a conclusion yet.
      - FIS returns the list of `FileUnderInterrogation` objects with the `secret_id` field omitted.
-2. `GET /storages/{storage_alias}/uploads/{file_id}/can_remove`: Returns a bool indicating whether a file can be removed from the `interrogation` bucket
+2. `GET /storages/{storage_alias}/uploads/can_remove?file_id={file_id}`: Returns a list of IDs indicating which files can be removed from the `interrogation` bucket
    - Authorization requires a JWT as described above.
      - FIS tries to verify the JWT using the public key associated with the `storage_alias` supplied in the endpoint.
-   - Returns `200 OK` and the value of the `can_remove` field of the requested `FileUnderInterrogation`
+   - File IDs are specified by query parameters
+   - Returns `200 OK` and list containing a subset of the IDs specified in the query parameters.
    - Description:
-     - FIS finds the existing `FileUnderInterrogation` in its database, raising an error if it doesn't find it (should be translated to True as an HTTP response but logged within the service as an error).
-     - Returns the value of `FileUnderInterrogation.can_remove`
+     - For each file specified in the query parameters, FIS finds the existing `FileUnderInterrogation` in its database, raising an error if it doesn't find it. 
+       - If the `FileUnderInterrogation` data isn't found for a given file, then the file should be considered removable (should be translated to True as an HTTP response but logged within the service as an error).
+       - If the value of `FileUnderInterrogation.can_remove` is `True`, FIS adds the file ID to the list of removable files.
 3. `POST /storages/{storage_alias}/interrogation-reports`: Accept an interrogation report
    - Authorization requires a JWT as described above.
      - FIS tries to verify the JWT using the public key associated with the `storage_alias` supplied in the endpoint.
@@ -511,7 +513,7 @@ If a checksum discrepancy is found, the DHFS rejects the upload and posts an `In
     - In the successful case, the `InterrogationReport` includes the new file encryption secret encrypted with the GHGA public key.
 
 #### DHFS Cleanup Job (secondary instance)
-The secondary duty of the DHFS is to clean up files from the `interrogation` bucket. Files must be removed once they have been fully copied to the permanent bucket, as well as on occasions that files are deleted from their parent box. Neither the FIS, UCS, nor IFRS can perform this action because they don't have write access to the `interrogation` bucket. Each time this DHFS instance runs, it retrieves a list of all objects (files) currently in the `interrogation` bucket. Then for each file, the DHFS makes a separate GET request to the FIS API's `GET /uploads/{file_id}/can_remove` endpoint. For authentication, the DHFS uses its own private key to encrypt the file ID pertaining to the request, then uses the FIS public key to encrypt a token containing the Data Hub's storage alias and the encrypted file ID. The DHFS will *delete* the file from the `interrogation` bucket if FIS returns True.
+The secondary duty of the DHFS is to clean up files from the `interrogation` bucket. Files must be removed once they have been fully copied to the permanent bucket, as well as on occasions that files are deleted from their parent box. Neither the FIS, UCS, nor IFRS can perform this action because they don't have write access to the `interrogation` bucket. Each time this DHFS instance runs, it retrieves a list of all objects (files) currently in the `interrogation` bucket. Then the DHFS makes a single GET request to the FIS API's `GET /storage/{storage_alias}/uploads/can_remove` endpoint and supplies the file IDs as query parameters (`file_id=<file_id>&file_id=<file_id>,...`). For authentication, the DHFS signs a JWT with its private key. In response, the DHFS expects to get a list containing the IDs of files which may be deleted from the interrogation bucket. The DHFS will then *delete* each listed file from the `interrogation` bucket.
 
 #### DHFS Configuration
 The DHFS needs the following configuration:
@@ -719,12 +721,17 @@ sequenceDiagram
     
     DHFS->>interrogation: List object IDs (polling)
     interrogation-->>DHFS:
+    DHFS->>FIS: GET (file IDs as query params)
     rect rgb(30, 30, 30, .8)
-        loop For each file in bucket
-            DHFS->>FIS: GET /uploads/{file_id}/can_remove
-            FIS->>FIS: Retrieve FileUnderInterrogation
-            FIS-->>DHFS: Reponse w/ value of can_remove
-            DHFS->>interrogation: Delete if True
+        loop For each file specified in query params
+          FIS->>FIS: Retrieve FileUnderInterrogation
+          FIS->>FIS: If can_remove, append ID to list
+        end
+    end
+    FIS-->>DHFS: List of files to delete
+    rect rgb(30, 30, 30, .8)
+        loop For each file in list
+          DHFS->>interrogation: Delete file
         end
     end
 ```
