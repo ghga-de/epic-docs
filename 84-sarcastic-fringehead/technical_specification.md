@@ -245,10 +245,9 @@ The UCS operates the following new endpoints:
   - Description:
     - The UCS finds the `FileUploadBox` in its database and raises an error if it can't
     - The UCS ensures the `FileUploadBox` is locked but not archived, raising an error otherwise.
-    - Before making database writes, the UCS retrieves all specified `FileUpload` objects and:
-      - Ensures the file state is not `archived`.
-      - Ensures the file accession field is not assigned, or if it is assigned, that it matches the accession provided in the request. Otherwise, UCS raises an error and returns a `409 CONFLICT` response.
-    - The updated `FileUpload` objects are published as outbox events.
+    - Before making database writes, the UCS retrieves all specified `FileUpload` objects and ensures the file state is not `archived`.
+    - The UCS ensures that all accessions are unique (this needs to be a global check).
+    - The UCS updated `FileUpload` objects are published as outbox events.
 
 - `PATCH /boxes/{box_id}`: This endpoint already exists, but is augmented here to allow `FileUploadBox` *archival*.
   - Authorized by a token signed by the UOS with the work type `"archive"` and including the `box_id`
