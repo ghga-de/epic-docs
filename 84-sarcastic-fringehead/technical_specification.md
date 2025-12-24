@@ -396,30 +396,27 @@ In addition to implementing the endpoints defined here, the existing functionali
 
 > See the [diagram](#example-auth-token-structure-for-dhfs-calls-to-fis-api) for an illustration of the proposed auth token structure for inbound requests to the FIS API
 
+**JWT Authentication:**  
+The FIS's endpoints which are meant for the DHFS require a JWT (JSON Web Token) signed with the Data Hub's private key. The `sub` field should contain the storage alias of the Data Hub's inbox bucket (but in theory the interrogation bucket alias could also work as long as it's configured in WKVS). The `aud` and `iss` fields should both be `GHGA`.
+
 The FIS operates an HTTP API with these endpoints:
 1. `GET /storages/{storage_alias}/uploads`: Serve a list of new file uploads (yet to be interrogated)
-   - Authorization requires a 2-layer token created with both the FIS public key and the Data Hub-specific private key:
-     - The inner layer contains the `storage_alias` and is encrypted with the Data Hub's private key.
-     - The outer layer *also* contains the `storage_alias` in addition to the inner layer described above, and is encrypted with FIS public key.
-     - FIS decrypts the outer token layer with its private key to learn which Data Hub public key to use to decrypt the inner layer. The inner layer certifies that the request was indeed sent from the given Data Hub.
+   - Authorization requires a JWT as described above.
+     - FIS tries to verify the JWT using the public key associated with the `storage_alias` supplied in the endpoint.
    - Returns `200 OK` and a list of `FileUnderInterrogation` objects for files awaiting interrogation
    - Description:
      - FIS gets the `FileUnderInterrogation` objects which match the requested storage alias and have both `can_remove=False` and `interrogated=False`, i.e. interrogations which haven't reached a conclusion yet.
      - FIS returns the list of `FileUnderInterrogation` objects with the `secret_id` field omitted.
 2. `GET /storages/{storage_alias}/uploads/{file_id}/can_remove`: Returns a bool indicating whether a file can be removed from the `interrogation` bucket
-   - Authorization requires a 2-layer token created with both the FIS public key and the Data Hub-specific private key:
-     - The inner layer contains the file ID and is encrypted with the Data Hub's private key
-     - The outer layer contains the `storage_alias` in addition to the inner layer described above, and is encrypted with FIS public key. 
-     - FIS decrypts the outer token layer with its private key to learn which Data Hub public key to use to decrypt the inner layer. The inner layer certifies that the request was indeed sent from the given Data Hub.
+   - Authorization requires a JWT as described above.
+     - FIS tries to verify the JWT using the public key associated with the `storage_alias` supplied in the endpoint.
    - Returns `200 OK` and the value of the `can_remove` field of the requested `FileUnderInterrogation`
    - Description:
      - FIS finds the existing `FileUnderInterrogation` in its database, raising an error if it doesn't find it (should be translated to True as an HTTP response but logged within the service as an error).
      - Returns the value of `FileUnderInterrogation.can_remove`
-3. `POST /interrogation-reports`: Accept an interrogation report
-   - Authorization requires a 2-layer token created with both the FIS public key and the Data Hub-specific private key:
-     - The inner layer contains the file ID and is encrypted with the Data Hub's private key
-     - The outer layer contains the `storage_alias` in addition to the inner layer described above, and is encrypted with FIS public key. 
-     - FIS decrypts the outer token layer with its private key to learn which Data Hub public key to use to decrypt the inner layer. The inner layer certifies that the request was indeed sent from the given Data Hub.
+3. `POST /storages/{storage_alias}/interrogation-reports`: Accept an interrogation report
+   - Authorization requires a JWT as described above.
+     - FIS tries to verify the JWT using the public key associated with the `storage_alias` supplied in the endpoint.
    - Request body must contain a payload conforming to the `InterrogationReport` [schema](#interrogationreport)
    - Returns `204 NO CONTENT`
    - Description:
@@ -751,11 +748,6 @@ stateDiagram-v2
       - Transitions driven by InterrogationSuccess/InterrogationFailure published by FIS
     end note
 ```
-
-#### Example Auth Token Structure for DHFS calls to FIS API
-> See the [FIS HTTP API](#fis-http-api) section for context.
-
-![FIS Auth Example](./images/fis_auth.png)
 
 
 ## Human Resource/Time Estimation:
