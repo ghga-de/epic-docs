@@ -213,7 +213,7 @@ class FileAccessionMap(BaseModel):
 The UCS takes on an expanded role from what was defined in Lynx Boreal. Previously, the UCS was only concerned with getting files into the `inbox` bucket, and after that it didn't care what happened. However, further consideration has resulted in the viewpoint that the UCS is actually the source of truth for files all the way up until they are copied into permanent storage. Intermediate steps that occur in other services provide subsequent information to the UCS regarding the `FileUpload`, but those services do not assume ownership of the essential file information. Not only that, but the relationship between `FileUpload` IDs and accession numbers should and will be managed by the UCS during the interim phase while official accession management is still under development. The UCS operates two instances - an HTTP API and an event consumer.
 
 #### UCS Event Consumer
-The UCS event consumer instance subscribes to the `InterrogationSuccess` and `InterrogationFailure` *persistent events* published by the FIS. The schemas are[detailed above](#interrogationsuccess). 
+The UCS event consumer instance subscribes to the `InterrogationSuccess` and `InterrogationFailure` *persistent events* published by the FIS. The schemas are [detailed above](#interrogationsuccess). 
 
 When a new `InterrogationSuccess` or `InterrogationFailure` event arrives, UCS:
 - Finds the matching `FileUpload` in its database and raises an error if it can't.
