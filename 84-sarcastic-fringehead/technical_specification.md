@@ -406,13 +406,14 @@ The FIS operates an HTTP API with these endpoints:
    - Description:
      - FIS gets the `FileUnderInterrogation` objects which match the requested storage alias and have both `can_remove=False` and `interrogated=False`, i.e. interrogations which haven't reached a conclusion yet.
      - FIS returns the list of `FileUnderInterrogation` objects with the `secret_id` field omitted.
-2. `GET /storages/{storage_alias}/uploads/can_remove?file_id={file_id}`: Returns a list of IDs indicating which files can be removed from the `interrogation` bucket
+2. `POST /storages/{storage_alias}/uploads/can_remove`: Returns a list of IDs indicating which files can be removed from the `interrogation` bucket
    - Authorization requires a JWT as described above.
      - FIS tries to verify the JWT using the public key associated with the `storage_alias` supplied in the endpoint.
-   - File IDs are specified by query parameters
+   - Request body must contain the File IDs in question
    - Returns `200 OK` and list containing a subset of the IDs specified in the query parameters.
+   - Although this operation is a retrieval, which would normally be a `GET` operation, we use `POST` because URL size could otherwise exceed several KB quite quickly.
    - Description:
-     - For each file specified in the query parameters, FIS finds the existing `FileUnderInterrogation` in its database, raising an error if it doesn't find it. 
+     - For each file specified in the request body, FIS finds the existing `FileUnderInterrogation` in its database, raising an error if it doesn't find it. 
        - If the `FileUnderInterrogation` data isn't found for a given file, then the file should be considered removable (should be translated to True as an HTTP response but logged within the service as an error).
        - If the value of `FileUnderInterrogation.can_remove` is `True`, FIS adds the file ID to the list of removable files.
 3. `POST /storages/{storage_alias}/interrogation-reports`: Accept an interrogation report
@@ -512,7 +513,7 @@ If a checksum discrepancy is found, the DHFS rejects the upload and posts an `In
     - In the successful case, the `InterrogationReport` includes the new file encryption secret encrypted with the GHGA public key.
 
 #### DHFS Cleanup Job (secondary instance)
-The secondary duty of the DHFS is to clean up files from the `interrogation` bucket. Files must be removed once they have been fully copied to the permanent bucket, as well as on occasions that files are deleted from their parent box. Neither the FIS, UCS, nor IFRS can perform this action because they don't have write access to the `interrogation` bucket. Each time this DHFS instance runs, it retrieves a list of all objects (files) currently in the `interrogation` bucket. Then the DHFS makes a single GET request to the FIS API's `GET /storage/{storage_alias}/uploads/can_remove` endpoint and supplies the file IDs as query parameters (`file_id=<file_id>&file_id=<file_id>,...`). For authentication, the DHFS signs a JWT with its private key. In response, the DHFS expects to get a list containing the IDs of files which may be deleted from the interrogation bucket. The DHFS will then *delete* each listed file from the `interrogation` bucket.
+The secondary duty of the DHFS is to clean up files from the `interrogation` bucket. Files must be removed once they have been fully copied to the permanent bucket, as well as on occasions that files are deleted from their parent box. Neither the FIS, UCS, nor IFRS can perform this action because they don't have write access to the `interrogation` bucket. Each time this DHFS instance runs, it retrieves a list of all objects (files) currently in the `interrogation` bucket. Then the DHFS makes a single GET request to the FIS API's `POST /storages/{storage_alias}/uploads/can_remove` endpoint and supplies the file IDs in the request body. As stated in the FIS section, although this operation is a retrieval and would normally be a `GET` operation, we use `POST` because URL size could otherwise exceed several KB quite quickly. For authentication, the DHFS signs a JWT with its private key. In response, the DHFS expects to get a list containing the IDs of files which may be deleted from the interrogation bucket. The DHFS will then *delete* each listed file from the `interrogation` bucket.
 
 #### DHFS Configuration
 The DHFS needs the following configuration:
