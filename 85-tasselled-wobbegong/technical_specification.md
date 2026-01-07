@@ -79,7 +79,7 @@ The providers should be implemented in one module per backend. Each module can h
 
 When supporting Pydantic models as values, the provider needs enough information to reconstruct the correct model class when reading back values. Therefore, model-based stores should be configured with the Pydantic model type (e.g. passed into the constructor). Encoding can use Pydantic's `model_dump_json()` method (and decoding the corresponding `model_validate_json()`).
 
-Namespaces could be supported by adding a namespace prefix to every key. One key-value store should handle one namespace only, which should be provided in the constructor.
+Namespaces could be supported by adding a namespace prefix to every key. One key-value store instance should handle one namespace only, which should be provided in the constructor.
 
 
 ## Human Resource/Time Estimation
