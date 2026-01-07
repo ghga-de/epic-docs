@@ -63,7 +63,7 @@ class KeyValueStoreProtocol(Protocol, Generic[V]):
         """
         pass
 
-    async def has(self, key: str) -> bool:
+    async def exists(self, key: str) -> bool:
         """Check if the given key exists.
         
         Default implementation for classes inheriting from this protocol.
