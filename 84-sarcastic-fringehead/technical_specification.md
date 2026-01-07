@@ -584,7 +584,7 @@ The Dataset Information Service (DINS) is only relevant here because it consumes
 ---
 
 ### DCS:
-The DCS subscribes to `FileInternallyRegistered` events from the IFRS to learn about which files are available for download from GHGA. The changes in that event schema, which are described above in the [schema definition](#fileinternallyregistered) above, necessitate database migrations and code updates in the DCS.
+The DCS subscribes to `FileInternallyRegistered` events from the IFRS to learn about which files are available for download from GHGA. The changes in that event schema, which are described in the [schema definition](#fileinternallyregistered) above, necessitate database migrations and code updates in the DCS.
 
 #### Migrating existing DCS data
 The `drs_objects` collection needs the following migration changes applied:
