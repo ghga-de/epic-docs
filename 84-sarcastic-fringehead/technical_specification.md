@@ -74,6 +74,7 @@ INIT = "init"  # unchanged, means the file is being uploaded to the inbox
 INBOX = "inbox"  # unchanged, means the file is in the inbox awaiting interrogation
 FAILED = "failed"  # new state, means problem with interrogation, upload, etc.
 INTERROGATED = "interrogated"  # new state, means file interrogation was valid
+AWAITING_ARCHIVAL = "awaiting_archival"  # new state, means file can be archived by IFRS
 ARCHIVED = "archived"  # now means the file is officially in permanent storage
 ```
 
@@ -93,7 +94,6 @@ decrypted_size: int     # The size of the unencrypted file
 part_size: int  # The number of bytes in each file part (last part is likely smaller)
 encrypted_parts_md5: list[str] | None     # Is None until DHFS finishes with file
 encrypted_parts_sha256: list[str] | None  # Is None until DHFS finishes with file
-accession: str | None   # The accession number for the file. This field should have a unique index placed on it.
 ```
 
 #### InterrogationSuccess
@@ -168,7 +168,7 @@ class InterrogationReport(BaseModel):
 ```
 
 #### ArchivableFileUpload
-> This schema represents what IFRS checks for validation when consuming a `FileUpload` event with the `archived` state. It is not itself an event schema.
+> This schema represents what IFRS checks for validation when consuming a `FileUpload` event with the `awaiting_archival` state. It is not itself an event schema.
 ```python
 class ArchivableFileUpload(BaseModel):
     """Contains all the information needed for a file to be permanently archived"""
@@ -180,7 +180,6 @@ class ArchivableFileUpload(BaseModel):
     part_size: int
     encrypted_parts_md5: list[str]
     encrypted_parts_sha256: list[str]
-    accession: str
 ```
 
 #### FileAccessionMap
@@ -213,12 +212,12 @@ class FileAccessionMap(BaseModel):
 The UCS takes on an expanded role from what was defined in Lynx Boreal. Previously, the UCS was only concerned with getting files into the `inbox` bucket, and after that it didn't care what happened. However, further consideration has resulted in the viewpoint that the UCS is actually the source of truth for files all the way up until they are copied into permanent storage. Intermediate steps that occur in other services provide subsequent information to the UCS regarding the `FileUpload`, but those services do not assume ownership of the essential file information. Not only that, but the relationship between `FileUpload` IDs and accession numbers should and will be managed by the UCS during the interim phase while official accession management is still under development. The UCS operates two instances - an HTTP API and an event consumer.
 
 #### UCS Event Consumer
-The UCS event consumer instance subscribes to the `InterrogationSuccess` and `InterrogationFailure` *persistent events* published by the FIS. The schemas are [detailed above](#interrogationsuccess). 
+The UCS event consumer instance subscribes to the `InterrogationSuccess` and `InterrogationFailure` *persistent events* published by the FIS. It also subscribes to the `FileInternallyRegistered` events published by the IFRS. The schemas are [detailed above](#interrogationsuccess). 
 
 When a new `InterrogationSuccess` or `InterrogationFailure` event arrives, UCS:
 - Finds the matching `FileUpload` in its database and raises an error if it can't.
 - Checks that the `FileUpload` has a state of `inbox`.
-  - If it doesn't (e.g. the state is already `interrogated`, `failed`, `cancelled`, or `archived`), UCS compares `FileUpload.state_updated` and `InterrogationSuccess.interrogated_at`.
+  - If it doesn't (e.g. the state is already `interrogated`, `failed`, `cancelled`, `awaiting_archival`, or `archived`), UCS compares `FileUpload.state_updated` and `InterrogationSuccess.interrogated_at`.
     - If the `InterrogationSuccess` timestamp is newer, UCS raises an error and the event is sent to the DLQ.
     - If the UCS timestamp is newer, the event is ignored and no further action is taken.
     - If the timestamps are the same, the UCS verifies if there is a difference in the information. In the case that the information is the same, the UCS stops processing. If there is a difference, the UCS processes the event (this could happen if, for example, we carry out a data fix and want to re-process the events with the fixed state).
@@ -231,6 +230,8 @@ However, if the event is `InterrogationFailure`, UCS sets `FileUpload.state` to 
 
 In both cases, UCS deletes the file from the `inbox` bucket. At this point, the event consumer instance is finished processing the event and waits for the next event. The updates to the `FileUpload` will be published as an outbox event.
 
+When the UCS receives a `FileInternallyRegistered` event, it locates the corresponding `FileUpload` and updates its state to `archived` and publishes it as an outbox event.
+
 As a final note on the UCS, the UCS is the place where `box_id` is populated for `FileUpload` objects. You can read about that process in Lynx Boreal, but the long-short is that a Data Steward manually creates a `ResearchDataUploadBox` in the UOS, which has a separate ID, and that automatically triggers the creation of a subordinate `FileUploadBox` in the UCS, which has an independent ID. Whenever a new file is added for that box, the `FileUpload` gets the `box_id` of the parent `FileUploadBox`.
 
 #### UCS HTTP API
@@ -239,16 +240,6 @@ You can read about the existing UCS endpoints in the Lynx Boreal epic. I will on
 > Note: The GET /boxes/{box_id}/uploads endpoint needs to exclude the secret_id and checksum fields
 
 The UCS operates the following new endpoints:
-- `PATCH /boxes/{box_id}/accessions`: Accepts a payload which maps `FileUpload` IDs to accession numbers for a given `FileUploadBox`
-  - Authorized by a token signed by the UOS with the work type `"map"` and including the `box_id`
-  - Returns `204 NO CONTENT`
-  - Description:
-    - The UCS finds the `FileUploadBox` in its database and raises an error if it can't
-    - The UCS ensures the `FileUploadBox` is locked but not archived, raising an error otherwise.
-    - Before making database writes, the UCS retrieves all specified `FileUpload` objects and ensures the file state is not `archived`.
-    - The UCS ensures that all accessions are unique (this needs to be a global check).
-    - The UCS updated `FileUpload` objects are published as outbox events.
-
 - `PATCH /boxes/{box_id}`: This endpoint already exists, but is augmented here to allow `FileUploadBox` *archival*.
   - Authorized by a token signed by the UOS with the work type `"archive"` and including the `box_id`
   - Returns `204 NO CONTENT`
@@ -257,9 +248,9 @@ The UCS operates the following new endpoints:
     - The UCS verifies that the `FileUploadBox` is locked but not archived.
       - If archived, the UCS returns early as it assumes that the work is already done
     	- If not locked, the UCS raises an error
-    - The UCS looks up every `FileUpload` associated with the box and verifies that each one has an assigned accession and a state of `interrogated`. If any are not set, the UCS raises an error and rejects the box archival.
-      - UCS sets each `FileUpload.state` to `archived` and likewise updates the `FileUpload.state_updated` timestamp.
-      - If every `FileUpload` already has an assigned accession and a state of `archived`, the UCS skips to updating the `FileUploadBox`.
+    - The UCS looks up every `FileUpload` associated with the box and verifies that each one has a state of `interrogated` or else raises an error and rejects the box archival.
+      - UCS sets each `FileUpload.state` to `awaiting_archival` and likewise updates the `FileUpload.state_updated` timestamp.
+      - If every `FileUpload` already has a state of `awaiting_archival`, the UCS skips to updating the `FileUploadBox`.
     - The UCS publishes an outbox event for each modified `FileUpload`.
     - The UCS sets `FileUploadBox.archived` to True and publishes the updated object as an outbox event.
 
@@ -285,12 +276,12 @@ The UCS needs the following config changes:
 ---
 
 ### UOS:
-The UOS remains mostly unchanged from its initial implementation in Lynx Boreal, except for gaining a new, temporary responsibility to relay **accession maps** to the UCS. Through a new HTTP API endpoint, the UOS will take in objects that map file IDs from `FileUpload` objects to an accession number. This is temporary because it fills in a functional gap in the overall system that still has to be planned out. In the future, this endpoint will be removed (or at least no longer used). The UOS operates both an HTTP API instance and an event consumer instance.
+The UOS remains mostly unchanged from its initial implementation in Lynx Boreal, except for gaining a new, temporary responsibility to send **accession maps** to the IFRS upon box archival. UOS will be considered the owner of accession maps. Through a new HTTP API endpoint, the UOS will take in objects that map file IDs from `FileUpload` objects to an accession number. This is temporary because it fills in a functional gap in the overall system that still has to be planned out. In the future, this endpoint will be removed (or at least no longer used). The UOS operates both an HTTP API instance and an event consumer instance.
 
 #### UOS HTTP API
 > [Return to API list](#restfulsynchronous)
 
-The UOS would get the following new endpoint:  
+The UOS gets the following new endpoint:  
 `PATCH /boxes/{box_id}/accessions`: Accept a file-to-accession mapping in order to relay it to the UCS
 - Authorization uses auth context protocol and requires a Data Steward role
 - Request body must contain a payload conforming to the `FileAccessionMap` [schema](#fileaccessionmap)
@@ -298,9 +289,17 @@ The UOS would get the following new endpoint:
 - Description:
   - UOS looks for the `ResearchDataUploadBox` in its database with an ID that matches the value in the path parameter, and returns a `404 NOT FOUND` if it doesn't find it.
   - UOS ensures the `ResearchDataUploadBox` is not already ARCHIVED, and raises an error if it is. This might return a `409 CONFLICT` status code.
-  - UOS self-signs a `ChangeFileBoxWorkOrder` token and makes a PATCH request to the UCS's `/boxes/{box_id}/accessions` endpoint.
-    - The UOS uses `ResearchDataUploadBox.file_upload_box_id` for the `box_id` parameter in both the token and UCS call.
-    - The request body contains the accession map that was supplied in the original request to the UOS.
+  - UOS stores the accession mapping in its accessions collection. If any of the accessions aren't globally unique, UOS returns a `400 BAD REQUEST` error.
+
+The UOS gets updates to the following existing endpoints:  
+`PATCH /boxes/{box_id}`: This endpoint gains the responsibility of ensuring all files in a FileUpload box are assigned a unique accession before allowing archival of the `ResearchDataUploadBox`. Ignoring use cases where other box attributes are modified and focusing solely on the box archival operation:
+- UOS ensures the `ResearchDataUploadBox` is in the `locked` state and raises an error if it isn't.
+- UOS looks at its accession mapping collection in the database and confirms that all files in the box have a globally unique accession assigned, and raises an error if not.
+- UOS self-signs a `ChangeFileBoxWorkOrder` token and makes a PATCH request to the UCS's `/boxes/{box_id}` endpoint.
+- If the UCS returns a failure response, UOS does as well.
+- If the UCS returns a successful response, UOS publishes a Persisted event containing the accession map for all files in the box as a simple dictionary where the file IDs are the keys. This should be published to a dedicated `accession-mappings` topic.
+
+> Note: In the future when we replace the temporary accession map solution, we will need to perform a migration that combs through the Persisted events store and selectively deletes entries for accession mappings while leaving audit logs in place.
 
 
 #### UOS Configuration
@@ -382,7 +381,7 @@ The FIS subscribes to `FileUpload` *outbox events* from the UCS.
 
 When a new `FileUpload` event arrives with the state `inbox` FIS first checks its database to see if it has a copy already stored in its database. If it does, FIS either ignores the event or raises an error depending on specific criteria (implementation detail). If the event is new, FIS stores the event as a `FileUnderInterrogation` using the [FileUnderInterrogation schema](#FileUnderInterrogation) so that it can be later relayed to the DHFS.
 
-When a `FileUpload` event arrives with a state other than `init` or `inbox`, e.g. `failed`, `cancelled`, `interrogated`, or `archived`, FIS will merely update its local `FileUnderInterrogation` copy (or create it if it doesn't exist) and set the `can_remove` field to True. FIS should never store any information for a `FileUpload` with the state `init`.
+When a `FileUpload` event arrives with a state other than `init` or `inbox`, e.g. `failed`, `cancelled`, `interrogated`, `awaiting_archival`, or `archived`, FIS will merely update its local `FileUnderInterrogation` copy (or create it if it doesn't exist) and set the `can_remove` field to True. FIS should never store any information for a `FileUpload` with the state `init`.
 
 The FIS *also* subscribes to `FileInternallyRegistered` events from the IFRS. FIS is interested in these events because they communicate that a given file has been successfully copied from the `interrogation` bucket to the the `permanent` bucket. FIS locates the corresponding `FileUnderInterrogation` and raises an error if it can't. It then sets the `can_remove` field to True.
 
@@ -527,15 +526,22 @@ The DHFS needs the following configuration:
 ---
 
 ### IFRS:
-The role of the IFRS is to shepherd files into archival, by copying them from a Hub's `interrogation` bucket into the `permanent` bucket located at the same Data Hub. This only occurs once the Data Hub in question has completed the interrogation process, as detailed in the [DHFS section](#dhfs) above. This is the last step for a file in the Upload Path. Unlike the FIS and DHFS, the IFRS operates only as an event consumer.
+The role of the IFRS is to shepherd files into archival, by copying them from a Hub's `interrogation` bucket into the `permanent` bucket located at the same Data Hub. This only occurs once the Data Hub in question has completed the interrogation process, as detailed in the [DHFS section](#dhfs) above. This is the last step for a file in the Upload Path. Unlike the FIS and DHFS, the IFRS operates only as an event consumer. The other responsibility of the IFRS is to listen for inbound `FileAccessionMap` events.
 
 #### IFRS Event Consumer
-The IFRS subscribes to `FileUpload` outbox events from the UCS but only acts when it encounters an event with the state `archived`. It further validates the event using the [ArchivableFileUpload schema](#archivablefileupload). If the event represents a valid `FileUpload`, IFRS first checks that it doesn't already have this file registered. If it's indeed a new upload, IFRS copies the file from the `interrogation` bucket specified by `FileUpload.storage_alias` into the same location's `permanent` bucket. Once that is successful, the IFRS issues a `FileInternallyRegistered` event. This process is already in place within the IFRS, but some small tweaks are required. For example, the IFRS currently generates a *new* file ID when it registers a new file, meaning the a file would have one object ID in what is currently the inbox bucket, and a different object ID in permanent storage. This should change so the file ID is used as the object ID and remains constant from the time it is generated in the UCS through its lifespan at GHGA.
+The IFRS subscribes to `FileAccessionMap` events from the UOS. When a new one arrives, the IFRS first checks each accession in the map to make sure there isn't already a `DrsObject` with the same accession. If there is, it verifies that the S3 object ID matches the file ID in the received mapping and log it as *critical* if there's a discrepancy. If no `DrsObject` yet exists, then IFRS proceeds to look for an `ArchivableFileUpload` in its database (this is a `FileUpload` with a state of `awaiting_archival`). If no such entry exists, IFRS merely updates its accession mappings collection with the received information. If an entry does exist, however, then IFRS combines the `ArchivableFileUpload` data and the accession in order to perform the file registration procedure.
+
+The IFRS subscribes to `FileUpload` outbox events from the UCS but only acts when it encounters an event with the state `awaiting_archival`. It further validates the event using the [ArchivableFileUpload schema](#archivablefileupload). If the event represents a valid `FileUpload`, IFRS first checks that it doesn't already have this file registered. If it's indeed a new upload, IFRS checks for an accession number in its accession mappings collection in the database. If no accession exists, the IFRS stores the `ArchivableFileUpload` data (a subset of `FileUpload`) in its pending files collection in the database. If an accession does exist, however, then the file registration procedure occurs.
+
+**File Registration Procedure**  
+IFRS copies the file from the `interrogation` bucket specified by `FileUpload.storage_alias` into the same location's `permanent` bucket. Once that is successful, the IFRS issues a `FileInternallyRegistered` event. This process is already in place within the IFRS, but some small tweaks are required. For example, the IFRS currently generates a *new* file ID when it registers a new file, meaning the a file would have one object ID in what is currently the inbox bucket, and a different object ID in permanent storage. This should change so the file ID is used as the object ID and remains constant from the time it is generated in the UCS through its lifespan at GHGA.
 
 #### A note on file IDs and file accessions in the IFRS
 In the future, file accessions will not exist in the file services. For now though, we will still identify files by the file ID and/or accession number depending on the context. For example, during file upload we point to files using the file ID, but during file download a user specifies a file using the accession number. There is no mechanism external to the file services that performs that linkage in a decoupled way -- but there will be, one day! For now, the IFRS will keep the accession as the primary key for the file metadata object. In the future, the primary key will be switched to the object ID/file ID and accessions will be scrubbed from the database.
 
 Finally, the UUID4 file IDs generated by the recently revamped UCS during file upload are now also used as the object IDs in S3 storage. This does not have to be the case, and we can choose to generate a separate object ID if that layer of indirection is desired. At the time of writing though, this is not planned.
+
+> Note: In the future when we replace the temporary accession map solution, we will need to drop both the pending files and accession mappings collections. No migration will be necessary.
 
 #### Migrating existing IFRS data
 The `file_metadata` collection needs the following changes:
@@ -624,6 +630,7 @@ sequenceDiagram
         participant FileUploads
         participant InterrogationSuccess
         participant FileInternallyRegistered
+        participant AccessionMappings
     end
     box rgb(255, 255, 200, .5) Services
         participant Connector
@@ -686,24 +693,22 @@ sequenceDiagram
     UCS->>inbox: Delete File
     note right of FIS: Assume interrogation success
     note right of UCS: Data Steward submits<br>file accession map
-    UOS->>UCS: PATCH accession map
-    rect rgb(30, 30, 30, .4)
-        loop For each file in accession map
-            UCS->>FileUploads: UPSERT: FileUpload(accession="GHGA...")
-        end
-    end
     note right of UCS: At some point<br>UOS requests to<br>archive the box
     UOS->>UCS: PATCH archive the box
+    UOS->>AccessionMappings: Publish: FileAccessionMap
+    AccessionMappings->>IFRS: Consume: FileAccessionMap
     rect rgb(30, 30, 30, .4)
         loop For each file in box
-            UCS->>FileUploads: UPSERT: FileUpload(state=ARCHIVED)
-            FileUploads->>IFRS: UPSERT: FileUpload(state=ARCHIVED)
+            UCS->>FileUploads: UPSERT: FileUpload(state=AWAITING_ARCHIVAL)
+            FileUploads->>IFRS: UPSERT: FileUpload(state=AWAITING_ARCHIVAL)
             IFRS->>interrogation: Copy File from interrogation to permanent bucket
             interrogation-->>permanent: Copy File
             IFRS->>FileInternallyRegistered: Publish FileInternallyRegistered
             FileInternallyRegistered->>FIS: Consume FileInternallyRegistered
             FIS->>FIS: Set FileUnderInterrogation.can_remove=True
             note right of FIS: DHFS cleanup job asynchronously<br>gets files with can_remove=True
+            FileInternallyRegistered->>UCS: Consume FileInternallyRegistered
+            UCS->>FileUploads: UPSERT: FileUpload(state=ARCHIVED)
         end
     end
 ```
@@ -744,7 +749,8 @@ stateDiagram-v2
     inbox --> interrogated: DHFS report -> FIS (passed)
     inbox --> failed: DHFS report -> FIS (failed)
     inbox --> cancelled: UCS - file deleted
-    interrogated --> archived: UCS approves archival request
+    interrogated --> awaiting_archival: UCS approves archival request
+    awaiting_archival --> archived: UCS consumes FileInternallyRegistered
     archived --> [*]
     failed --> [*]
     cancelled --> [*]
