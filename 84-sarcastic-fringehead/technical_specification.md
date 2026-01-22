@@ -36,8 +36,9 @@ All user journeys are already detailed in Lynx Boreal. The operations added in t
 
 ### Payload Schemas for Events:
 
-#### ResearchDataUploadBoxState
+#### UploadBoxState
 ```python
+# Renamed from ResearchDataUploadBoxState
 OPEN = "open"
 LOCKED = "locked"
 ARCHIVED = "archived"  # This used to be `CLOSED = "closed"`
@@ -46,7 +47,7 @@ ARCHIVED = "archived"  # This used to be `CLOSED = "closed"`
 #### ResearchDataUploadBox
 ```python
 id: UUID4
-state: ResearchDataUploadBoxState
+state: UploadBoxState
 title: str
 description: str
 last_changed: UTCDatetime
@@ -61,8 +62,7 @@ storage_alias: str
 #### FileUploadBox
 ```python
 id: UUID4
-locked: bool = False  # if archived is True, then this field must also be True
-archived: bool = False  # New field. If True, this box is permanently locked
+state: UploadBoxState
 file_count: int
 size: int
 storage_alias: str
@@ -208,6 +208,8 @@ class FileAccessionMap(BaseModel):
 - Remove the `FileUploadReportEventsConfig` stateless config class
 - Rename `NonStagedFileRequested.s3_endpoint_alias` to `storage_alias`
 
+> Note: I recommend that we do not include `FileAccessionMap` in the schema library because it is only meant to be temporary and is a very simple schema. 
+
 ### UCS:
 The UCS takes on an expanded role from what was defined in Lynx Boreal. Previously, the UCS was only concerned with getting files into the `inbox` bucket, and after that it didn't care what happened. However, further consideration has resulted in the viewpoint that the UCS is actually the source of truth for files all the way up until they are copied into permanent storage. Intermediate steps that occur in other services provide subsequent information to the UCS regarding the `FileUpload`, but those services do not assume ownership of the essential file information. Not only that, but the relationship between `FileUpload` IDs and accession numbers should and will be managed by the UCS during the interim phase while official accession management is still under development. The UCS operates two instances - an HTTP API and an event consumer.
 
@@ -245,14 +247,15 @@ The UCS operates the following new endpoints:
   - Returns `204 NO CONTENT`
   - Description: 
     - The UCS finds the `FileUploadBox` in its database and raises an error if it can't.
-    - The UCS verifies that the `FileUploadBox` is locked but not archived.
-      - If archived, the UCS returns early as it assumes that the work is already done
-    	- If not locked, the UCS raises an error
+    - The UCS verifies that the `FileUploadBox` state is not `open`.
+    	- If the state is `open`, the UCS raises an error.
+      - If the state is `archived`, the UCS returns early as it assumes that the work is already done.
+      - If the state is `locked`, the UCS continues.
     - The UCS looks up every `FileUpload` associated with the box and verifies that each one has a state of `interrogated` or else raises an error and rejects the box archival.
       - UCS sets each `FileUpload.state` to `awaiting_archival` and likewise updates the `FileUpload.state_updated` timestamp.
       - If every `FileUpload` already has a state of `awaiting_archival`, the UCS skips to updating the `FileUploadBox`.
     - The UCS publishes an outbox event for each modified `FileUpload`.
-    - The UCS sets `FileUploadBox.archived` to True and publishes the updated object as an outbox event.
+    - The UCS sets `FileUploadBox` state to `archived` and publishes the updated object as an outbox event.
 
 Side note:  
 The work to provide a deletion endpoint accessible by GHGA Connector is *not* meant to be part of this epic. For now, assume all deletions/cancellations will be triggered from the Data Portal -> UOS -> UCS rather than from the GHGA Connector. Additionally, in case it wasn't clear, file deletions (or cancellations, rather) do not result in a `dao.delete()` call. The full document data remains, but the state is set to `cancelled`. When the GHGA Connector is enabled to perform deletions, the state might potentially be allowed to be set to `failed` in addition to `cancelled`. More thought is required here on the requirements for work order tokens, use cases, and alias vs file ID specifiers.
@@ -262,6 +265,7 @@ The UCS needs the following config changes:
 - Add event sub config for `InterrogationSuccess` and `InterrogationFailure` events
   - ghga-event-schemas -> `InterrogationSuccessEventsConfig`
   - ghga-event-schemas -> `InterrogationFailureEventsConfig`
+  - ghga-event-schemas -> `FileInternallyRegisteredEventsConfig`
 - Remove event sub config for `FileUploadReport` events
 
 #### Work to be performed for the UCS
@@ -271,7 +275,10 @@ The UCS needs the following config changes:
 - [ ] Remove existing subscription to `FileUploadReport` events
 - [ ] Add event subscriber for `InterrogationSuccess` and `InterrogationFailure` events
 - [ ] Add core behavior to handle `InterrogationSuccess` and `InterrogationFailure`
+- [ ] Add event subscriber for `FileInternallyRegistered` events
+- [ ] Add core behavior to handle `FileInternallyRegistered` events
 - [ ] Change existing deletion behavior to update `FileUpload.state` instead of actually deleting content.
+- [ ] Modify the logic for the "change box" endpoint to work with state field instead of booleans
 
 ---
 
@@ -303,19 +310,19 @@ The UOS gets updates to the following existing endpoints:
 
 
 #### UOS Configuration
-The UOS shouldn't need any config changes.
+- EventPubConfig for `FileAccessionMap` events topic
 
 #### Work to be performed for the UOS
 - [ ] Get schema updates from ghga-event-schemas
 - [ ] Add the new API endpoint described above
 - [ ] Add the FileAccessionMap definition somewhere in the UOS (not in a library)
 - [ ] Rename final box state to `archived` instead of `closed`
-- [ ] Add two new options to the `ChangeFileBoxWorkOrder` for the work type literal"
-      - `"map"`: represents the task of submitting the accession map
-      - `"archive"`: represents final, permanent sealing of `FileUploadBox`
-- [ ] Add the outbound UCS call to the UOS's `FileBoxClient` that uses the `"map"` type
+- [ ] Add a new `"archive"` option to the `ChangeFileBoxWorkOrder` for the work type literal" that represents final, permanent sealing of `FileUploadBox`
+- [ ] Add an event publisher for `FileAccessionMap` events
+- [ ] Add a DAO for file accession data
 - [ ] Add an outbound UCS call in the `FileBoxClient` with the same structure as `lock_file_upload_box()` and `unlock_file_upload_box()`, called `archive_file_upload_box()`
 - [ ] Call `FileBoxClient.archive_file_upload_box()` from the UOS core when moving a `ResearchDataUploadBox` to `archived` state (formerly labeled `closed`).
+- [ ] Modify the "update box" calls to the UCS so they specify state instead of the locked/archived booleans
 
 ---
 
@@ -439,6 +446,7 @@ The FIS needs the following configuration:
 - EventSubConfig:
   - ghga-event-schemas -> `FileUploadEventsConfig`
   - ghga-event-schemas -> `FileInternallyRegisteredEventsConfig`
+- EventPubConfig:
   - ghga-event-schemas -> `InterrogationSuccessEventsConfig`
   - ghga-event-schemas -> `InterrogationFailureEventsConfig`
 - OutboxSubConfig:
@@ -566,11 +574,14 @@ IFRS data migration should be moved to the init container style. Instead of exec
 #### IFRS Configuration
 - EventSubConfig:
   - ghga-event-schemas -> `FileUploadEventsConfig`
+  - Topic and type for `FileAccessionMap` events
 
 #### Work to be performed for the IFRS
 - [ ] Add local definition for `ArchivableFileUpload`
 - [ ] Add event subscriber for `InterrogationReport` events
 - [ ] Add outbox subscriber for `ResearchDataUploadBox` events
+- [ ] Add event subscriber for `FileAccessionMap` events
+- [ ] Add DAO for `ArchivableFileUpload` and `FileAccessionMap` data
 - [ ] Upon encountering an ARCHIVED `ResearchDataUploadBox`, retrieve the list of relevant files from the local store of `InterrogationReport` events
 - [ ] Copy each file from the `interrogation` bucket to the IFRS's permanent bucket
 - [ ] Get the updated `ghga-event-schemas` version and adapt IFRS for changes to `FileInternallyRegistered`
