@@ -100,20 +100,20 @@ encrypted_parts_sha256: list[str] | None  # Is None until DHFS finishes with fil
 > Persistent event published by FIS on behalf of DHFS
 ```python
 file_id: UUID4
-secret_id: str
-storage_alias: str
-interrogated_at: UTCDatetime
-encrypted_parts_md5: list[str]
-encrypted_parts_sha256: list[str]
+secret_id: str  # The internal ID of the DHFS-generated decryption secret
+storage_alias: str  # The storage alias of the interrogation bucket
+interrogated_at: UTCDatetime  # Time that the report was generated
+encrypted_parts_md5: list[str]  # The MD5 checksum for each file part, in sequence
+encrypted_parts_sha256: list[str] # The SHA256 checksum for each file part, in sequence
 ```
 
 #### InterrogationFailure
 > Persistent event published by FIS on behalf of DHFS
 ```python
 file_id: UUID4
-storage_alias: str  # the interrogation bucket storage alias
-interrogated_at: UTCDatetime
-reason: str
+storage_alias: str  # The interrogation bucket storage alias
+interrogated_at: UTCDatetime  # Time that the report was generated
+reason: str  # The text of the error that caused interrogation to fail
 ```
 
 #### FileInternallyRegistered
@@ -147,7 +147,6 @@ class FileUnderInterrogation(BaseModel):
     decrypted_sha256: str  # SHA-256 checksum of the entire unencrypted file content
     decrypted_size: int  # The size of the unencrypted file
     part_size: int  # The number of bytes in each file part (last part is likely smaller)
-    secret_id: str | None = None  # The internal ID of the DHFS-generated decryption secret
     interrogated: bool = False  # Indicates whether interrogation has been completed
     can_remove: bool = False  # Indicates whether file can be deleted from `interrogation` bucket
 ```
