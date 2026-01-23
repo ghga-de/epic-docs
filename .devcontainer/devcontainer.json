@@ -2,18 +2,9 @@
 // https://github.com/microsoft/vscode-dev-containers/tree/v0.195.0/containers/python-3
 {
 	"name": "epic-docs",
-	"build": {
-		"dockerfile": "Dockerfile",
-		"context": "..",
-		"args": {
-			// Update 'VARIANT' to pick a Python version: 3, 3.9, 3.8, 3.7, 3.6.
-			// Append -bullseye or -buster to pin to an OS version.
-			// Use the -bullseye variants if you are on a M1 mac.
-			"VARIANT": "3.9",
-			// Options
-			"NODE_VERSION": "16"
-		}
-	},
+	"dockerComposeFile": "docker-compose.yml",
+	"service": "epic-docs",
+	"workspaceFolder": "/workspace",
 	// Set *default* container specific settings.json values on container create.
 	"customizations": {
 		"vscode": {
@@ -27,6 +18,11 @@
 				},
 				"python.pythonPath": "/usr/local/bin/python",
 				"python.languageServer": "Pylance",
+				"python.analysis.typeCheckingMode": "basic",
+				"editor.codeActionsOnSave": {
+					"source.organizeImports": "explicit"
+				},
+				"editor.formatOnSave": true,
 				"editor.renderWhitespace": "all",
 				"editor.rulers": [
 					88
