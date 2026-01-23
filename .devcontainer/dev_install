@@ -1,4 +1,4 @@
 #!/bin/bash
 
-pip install -r /workspaces/epic-docs/requirements.txt
+pip install -r /workspace/requirements.txt
 pre-commit install
