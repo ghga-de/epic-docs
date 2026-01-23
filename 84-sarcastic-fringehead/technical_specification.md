@@ -83,7 +83,7 @@ ARCHIVED = "archived"  # now means the file is officially in permanent storage
 ```python
 id: UUID4       # Unique identifier for the file upload
 box_id: UUID4   # The ID of the FileUploadBox this FileUpload belongs to. There should be a compound unique index on this field and alias.
-alias: str      # The submitted alias from the metadata (unique within the box)
+alias: str      # The filename or other alias that allows mapping files to study metadata (unique within the box)
 state: FileUploadState = "init"  # The state of the FileUpload
 state_updated: UTCDatetime  # Timestamp of when state was updated
 storage_alias: str  # The storage alias for the inbox bucket
