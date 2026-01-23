@@ -1,0 +1,12 @@
+services:
+  epic-docs:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      args:
+        USER_UID: 1000
+        USER_GID: 1000
+    volumes:
+      - ..:/workspace:cached
+    command: sleep infinity
+    user: vscode
