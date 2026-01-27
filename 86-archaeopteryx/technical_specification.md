@@ -176,9 +176,9 @@ Used to create an upload token:
 
 ### WKVS
 
-Used to get the full names of the data hubs:
+Used to get the full names of the storage locations:
 
-`GET /values/data_hub_labels`
+`GET /values/storage_labels`
 
 ## Additional Implementation Details
 
