@@ -34,7 +34,7 @@ The currently existing page on the "work-packages" path that was meant to suppor
 
 The Upload Box Manager should provide a sub-page that helps establishing the missing link between the uploaded files in the Research Data Upload Boxes (RDUBs) and the submitted Experimental Metadata (EM):
 
-- RDUBs identify files via an internal address, but they also provide a unique alias
+- RDUBs identify files via a globally unique ID and by a user-specified alias that is unique per RDUB
 - EM identifies files via accession numbers, but files also have a field for the name of the file and an alias
 
 The alias stored in RDUB files is the filename of the file as it was uploaded via the GHGA connector. The file name submitted with the EM usually should correspond to this filename, but that is not guaranteed. Sometimes the alias is used instead, or the filenames submitted in the EM could be slightly different. It is also not guaranteed that the number of files matches - there could be more files listed in the EM than have been uploaded, or files can have been uploaded that have no corresponding entry in the EM. The frontend should handle these cases gracefully, and support the data steward in creating a mapping between the uploaded files and the EM entries with as much automation as possible while allowing manual overrides.
