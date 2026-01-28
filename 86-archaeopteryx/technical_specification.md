@@ -99,7 +99,7 @@ Step 2: After the upload box has been selected, the detailed description is show
 
 ![Upload Research Data, Step 2](./images/upload_research_data_step_2.png)
 
-Note: The button only appears when the Crypt4GH code has been entered. If "finish upload" has been checked, the control to enter the public key will disappear and a button with the text "Lock the upload box" will appear instead.
+Note: The button only appears when the Crypt4GH key has been entered. If "finish upload" has been checked, the control to enter the public key will disappear and a button with the text "Lock the upload box" will appear instead.
 
 Step 3: After "Generate an access token for upload" has been clicked, the upload token will be shown once:
 
@@ -113,6 +113,8 @@ Notes:
 
 Initially, metadata file names with a matching file name in the upload box are mapped automatically. Only exact matches count, and casing may be only different if there is only one case insensitive match. All such exact matches are shown in green color on the right side.
 
+The "mapped field in metadata" shall be automatically selected so that the number of such exact matches is maximized. If the selection for the field is changed or the "Reset" button is clicked, any manually established mappings shall be removed after confirmation by the user, and the matching files should be newly mapped again.
+
 The "Filter by" field allows filtering by filename. It shall be possible to enter just a part of the file name or just an extension, like ".fastq". The filter should be case insensitive and match both metadata names and uploaded file names. If a filter is set, a highly visible button to remove the filter should appear.
 
 The table shall be sortable by clicking on one of the columns in the header row, including the last column. This allows sorting the names so that unmapped files (which have not file name in the right column) appear at the top. The default sorting should be by extension first, then by filename.
@@ -123,9 +125,11 @@ Below the table there should also be a paginator (same as for most other tables)
 
 When clicking on a line in the table, an inline editor should appear where the user can enter a file name in the upload box that shall be mapped. Also, a selection box should pop up below the inline editor that shows all unmapped files and narrows down as the user types in characters. Exact matches should appear at the top of the selection list, following by other names ordered in the same way as the right column. When clicking outside the field or the selection box, or when pressing "Enter", the selected file name shall be accepted if it exists in the upload box and is not yet mapped elsewhere. Otherwise, the entry in the mapped columns shall stay empty. This also allows removing an already established mapping.
 
+Mappings that have been established manually and do not match exactly should be shown in blue instead of green color (maybe with additional indication like a warning sign for better visibility and a11y).
+
 When clicking "Reset" or "Cancel" and manual mappings have already been made, the user needs to confirm the action.
 
-When clicking "Confirm mapping and archive" a confirmation dialog should pop up as well, explaining that the action is irrevocable and a checkbox must be checked off to proceed. If not all files have been mapped, a dialog should pop up showing the number of unmapped files and the name of the first unmapped file and telling the user that all files need to be mapped.
+When clicking "Confirm mapping and archive" a confirmation dialog should pop up as well, explaining that the action is irrevocable and a checkbox must be ticked to proceed. If not all files have been mapped, a dialog should pop up showing the number of unmapped files and the name of the first unmapped file and telling the user that all files need to be mapped.
 
 ## API Endpoints used by the frontend
 
