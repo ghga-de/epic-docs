@@ -56,7 +56,7 @@ file_upload_box_id: UUID4
 locked: bool
 file_count: int
 size: int
-data_hub: str
+storage_alias: str
 ```
 
 #### FileUploadBox
@@ -65,7 +65,7 @@ id: UUID4
 state: UploadBoxState
 file_count: int
 size: int
-data_hub: str
+storage_alias: str
 ```
 
 #### FileUploadState
@@ -73,6 +73,7 @@ data_hub: str
 INIT = "init"  # unchanged, means the file is being uploaded to the inbox
 INBOX = "inbox"  # unchanged, means the file is in the inbox awaiting interrogation
 FAILED = "failed"  # new state, means problem with interrogation, upload, etc.
+CANCELLED = "cancelled"  # new state, means the file was removed by user or DS
 INTERROGATED = "interrogated"  # new state, means file interrogation was valid
 AWAITING_ARCHIVAL = "awaiting_archival"  # new state, means file can be archived by IFRS
 ARCHIVED = "archived"  # now means the file is officially in permanent storage
@@ -86,8 +87,7 @@ box_id: UUID4   # The ID of the FileUploadBox this FileUpload belongs to. There 
 alias: str      # The filename or other alias that allows mapping files to study metadata (unique within the box)
 state: FileUploadState = "init"  # The state of the FileUpload
 state_updated: UTCDatetime  # Timestamp of when state was updated
-data_hub: str  # A string identifying which Data Hub the file will be stored at
-storage_alias: str  # The storage alias for the inbox bucket
+storage_alias: str  # A string identifying which Data Hub the file will be stored at
 # Additionally, the following fields exist but are unset until later in the process
 secret_id: str | None
 decrypted_sha256: str | None  # SHA-256 checksum of the entire unencrypted file content
@@ -102,7 +102,7 @@ encrypted_parts_sha256: list[str] | None  # Is None until DHFS finishes with fil
 ```python
 file_id: UUID4
 secret_id: str  # The internal ID of the DHFS-generated decryption secret
-storage_alias: str  # The storage alias of the interrogation bucket
+storage_alias: str  # A string identifying which Data Hub the file will be stored at
 interrogated_at: UTCDatetime  # Time that the report was generated
 encrypted_parts_md5: list[str]  # The MD5 checksum for each file part, in sequence
 encrypted_parts_sha256: list[str] # The SHA256 checksum for each file part, in sequence
@@ -112,7 +112,7 @@ encrypted_parts_sha256: list[str] # The SHA256 checksum for each file part, in s
 > Persistent event published by FIS on behalf of DHFS
 ```python
 file_id: UUID4
-storage_alias: str  # The interrogation bucket storage alias
+storage_alias: str  # A string identifying which Data Hub the file will be stored at
 interrogated_at: UTCDatetime  # Time that the report was generated
 reason: str  # The text of the error that caused interrogation to fail
 ```
@@ -144,8 +144,7 @@ class FileUnderInterrogation(BaseModel):
     id: UUID4  # Unique identifier for the file upload
     state: FileUploadState = "init"  # The state of the FileUpload
     state_updated: UTCDatetime  # Timestamp of when state was updated
-    data_hub: str  # A string identifying which Data Hub the file will be stored at
-    storage_alias: str  # The storage alias for the inbox bucket
+    storage_alias: str  # A string identifying which Data Hub the file will be stored at
     decrypted_sha256: str  # SHA-256 checksum of the entire unencrypted file content
     decrypted_size: int  # The size of the unencrypted file
     part_size: int  # The number of bytes in each file part (last part is likely smaller)
@@ -159,7 +158,7 @@ class FileUnderInterrogation(BaseModel):
 class InterrogationReport(BaseModel):
     """Contains the results of file interrogation"""
     file_id: UUID4
-    storage_alias: str  # The storage alias for the interrogation bucket
+    storage_alias: str  # A string identifying which Data Hub the file will be stored at
     interrogated_at: UTCDatetime # Timestamp showing when interrogation finished
     passed: bool
     secret: SecretBytes | None = None  # Encrypted file encryption secret
@@ -281,8 +280,8 @@ The UCS needs the following config changes:
 - [ ] Add core behavior to handle `FileInternallyRegistered` events
 - [ ] Change existing deletion behavior to update `FileUpload.state` instead of actually deleting content.
 - [ ] Modify the logic for the "change box" endpoint to work with state field instead of booleans
-- [ ] Assign `storage_alias` to new file uploads based on the box's `data_hub` string
-- [ ] Validate `data_hub` when boxes are created by Data Stewards
+- [ ] Assign `storage_alias` to new file uploads
+- [ ] Validate `storage_alias` when boxes are created by Data Stewards
 
 ---
 
@@ -328,8 +327,7 @@ The UOS gets updates to the following existing endpoints:
 - [ ] Add an outbound UCS call in the `FileBoxClient` with the same structure as `lock_file_upload_box()` and `unlock_file_upload_box()`, called `archive_file_upload_box()`
 - [ ] Call `FileBoxClient.archive_file_upload_box()` from the UOS core when moving a `ResearchDataUploadBox` to `archived` state (formerly labeled `closed`).
 - [ ] Modify the "update box" calls to the UCS so they specify state instead of the locked/archived booleans
-- [ ] Replace `storage_alias` with `data_hub` for box creation
-- [ ] Validate `data_hub` when Data Stewards create a new `ResearchDataUploadBox`
+- [ ] Validate `storage_alias` when Data Stewards create a new `ResearchDataUploadBox`
 
 ---
 
@@ -409,19 +407,19 @@ In addition to implementing the endpoints defined here, the existing functionali
 > See the [diagram](#example-auth-token-structure-for-dhfs-calls-to-fis-api) for an illustration of the proposed auth token structure for inbound requests to the FIS API
 
 **JWT Authentication:**  
-The FIS's endpoints which are meant for the DHFS require a JWT (JSON Web Token) signed with the Data Hub's private key. The `sub` field should contain the storage alias of the Data Hub's inbox bucket (but in theory the interrogation bucket alias could also work as long as it's configured in WKVS). The `aud` and `iss` fields should both be `GHGA`.
+The FIS's endpoints which are meant for the DHFS require a JWT (JSON Web Token) signed with the Data Hub's private key. The `sub` field should contain the storage alias. The `aud` and `iss` fields should both be `GHGA`.
 
 The FIS operates an HTTP API with these endpoints:
-1. `GET /hubs/{data_hub}/uploads`: Serve a list of new file uploads (yet to be interrogated)
+1. `GET /storages/{storage_alias}/uploads`: Serve a list of new file uploads (yet to be interrogated)
    - Authorization requires a JWT as described above.
-     - FIS tries to verify the JWT using the public key associated with the `data_hub` supplied in the endpoint.
+     - FIS tries to verify the JWT using the public key associated with the `storage_alias` supplied in the endpoint.
    - Returns `200 OK` and a list of `FileUnderInterrogation` objects for files awaiting interrogation
    - Description:
      - FIS gets the `FileUnderInterrogation` objects which match the requested storage alias and have both `can_remove=False` and `interrogated=False`, i.e. interrogations which haven't reached a conclusion yet.
      - FIS returns the list of `FileUnderInterrogation` objects with the `secret_id` field omitted.
-2. `POST /hubs/{data_hub}/uploads/can_remove`: Returns a list of IDs indicating which files can be removed from the `interrogation` bucket
+2. `POST /storages/{storage_alias}/uploads/can_remove`: Returns a list of IDs indicating which files can be removed from the `interrogation` bucket
    - Authorization requires a JWT as described above.
-     - FIS tries to verify the JWT using the public key associated with the `data_hub` supplied in the endpoint.
+     - FIS tries to verify the JWT using the public key associated with the `storage_alias` supplied in the endpoint.
    - Request body must contain the File IDs in question
    - Returns `200 OK` and list containing a subset of the IDs specified in the query parameters.
    - Although this operation is a retrieval, which would normally be a `GET` operation, we use `POST` because URL size could otherwise exceed several KB quite quickly.
@@ -429,9 +427,9 @@ The FIS operates an HTTP API with these endpoints:
      - For each file specified in the request body, FIS finds the existing `FileUnderInterrogation` in its database, raising an error if it doesn't find it. 
        - If the `FileUnderInterrogation` data isn't found for a given file, then the file should be considered removable (should be translated to True as an HTTP response but logged within the service as an error).
        - If the value of `FileUnderInterrogation.can_remove` is `True`, FIS adds the file ID to the list of removable files.
-3. `POST /hubs/{data_hub}/interrogation-reports`: Accept an interrogation report
+3. `POST /storages/{storage_alias}/interrogation-reports`: Accept an interrogation report
    - Authorization requires a JWT as described above.
-     - FIS tries to verify the JWT using the public key associated with the `data_hub` supplied in the endpoint.
+     - FIS tries to verify the JWT using the public key associated with the `storage_alias` supplied in the endpoint.
    - Request body must contain a payload conforming to the `InterrogationReport` [schema](#interrogationreport)
    - Returns `204 NO CONTENT`
    - Description:
@@ -514,7 +512,7 @@ If a checksum discrepancy is found, the DHFS rejects the upload and posts an `In
     - The secret is encrypted using the GHGA public key
   - Calculates the content starting position (offset) from the envelope length
   - Initiates a multipart upload with the Data Hub's `interrogation` bucket
-  - Streams the object from the Data Hub's `inbox` bucket part-by-part using the same part size as found in `FileUpload.part_size`
+  - Streams the object from the Data Hub's `inbox` bucket part-by-part using either `FileUpload.part_size` or an adjusted value that keeps both the part count under 10k and the part size evenly divisible by the cipher segment size for optimal processing.
   - [Per File Part]
     - Decrypts the part
     - Re-encrypts the part using the newly generated file secret
@@ -527,14 +525,18 @@ If a checksum discrepancy is found, the DHFS rejects the upload and posts an `In
     - In the successful case, the `InterrogationReport` includes the new file encryption secret encrypted with the GHGA public key.
 
 #### DHFS Cleanup Job (secondary instance)
-The secondary duty of the DHFS is to clean up files from the `interrogation` bucket. Files must be removed once they have been fully copied to the permanent bucket, as well as on occasions that files are deleted from their parent box. Neither the FIS, UCS, nor IFRS can perform this action because they don't have write access to the `interrogation` bucket. Each time this DHFS instance runs, it retrieves a list of all objects (files) currently in the `interrogation` bucket. Then the DHFS makes a single GET request to the FIS API's `POST /hubs/{data_hub}/uploads/can_remove` endpoint and supplies the file IDs in the request body. As stated in the FIS section, although this operation is a retrieval and would normally be a `GET` operation, we use `POST` because URL size could otherwise exceed several KB quite quickly. For authentication, the DHFS signs a JWT with its private key. In response, the DHFS expects to get a list containing the IDs of files which may be deleted from the interrogation bucket. The DHFS will then *delete* each listed file from the `interrogation` bucket.
+The secondary duty of the DHFS is to clean up files from the `interrogation` bucket. Files must be removed once they have been fully copied to the permanent bucket, as well as on occasions that files are deleted from their parent box. Neither the FIS, UCS, nor IFRS can perform this action because they don't have write access to the `interrogation` bucket. Each time this DHFS instance runs, it retrieves a list of all objects (files) currently in the `interrogation` bucket. Then the DHFS makes a single GET request to the FIS API's `POST /storages/{storage_alias}/uploads/can_remove` endpoint and supplies the file IDs in the request body. As stated in the FIS section, although this operation is a retrieval and would normally be a `GET` operation, we use `POST` because URL size could otherwise exceed several KB quite quickly. For authentication, the DHFS signs a JWT with its private key. In response, the DHFS expects to get a list containing the IDs of files which may be deleted from the interrogation bucket. The DHFS will then *delete* each listed file from the `interrogation` bucket.
 
 #### DHFS Configuration
 The DHFS needs the following configuration:
 - LoggingConfig
 - OpenTelemetryConfig
 - S3ObjectStoragesConfig
-- auth_token_signing_key
+- central_api_crypt4gh_public_key
+  - Used to encrypt the file encryption secret
+- data_hub_crypt4gh_private_key_path
+  - Path to the Data Hub's crypt4gh private encryption key, used to decrypt files.
+- data_hub_signing_key
   - This is the Data Hub's private key, which it uses to sign auth tokens sent to FIS
 - wkvs_api_url
   - Used to contact WKVS to get the GHGA central public key (alternatively this could be directly configured as fis_public_key)
