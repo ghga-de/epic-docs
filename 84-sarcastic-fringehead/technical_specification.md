@@ -88,6 +88,7 @@ alias: str      # The filename or other alias that allows mapping files to study
 state: FileUploadState = "init"  # The state of the FileUpload
 state_updated: UTCDatetime  # Timestamp of when state was updated
 storage_alias: str  # A string identifying which Data Hub the file will be stored at
+bucket_id: str  # The name of the bucket where the file currently resides
 # Additionally, the following fields exist but are unset until later in the process
 secret_id: str | None
 decrypted_sha256: str | None  # SHA-256 checksum of the entire unencrypted file content
@@ -103,6 +104,7 @@ encrypted_parts_sha256: list[str] | None  # Is None until DHFS finishes with fil
 file_id: UUID4
 secret_id: str  # The internal ID of the DHFS-generated decryption secret
 storage_alias: str  # A string identifying which Data Hub the file will be stored at
+bucket_id: str  # The name of the interrogation bucket where the file is stored
 interrogated_at: UTCDatetime  # Time that the report was generated
 encrypted_parts_md5: list[str]  # The MD5 checksum for each file part, in sequence
 encrypted_parts_sha256: list[str] # The SHA256 checksum for each file part, in sequence
@@ -124,6 +126,7 @@ reason: str  # The text of the error that caused interrogation to fail
 # bucket_id is removed because storage_alias should already point to specific bucket
 file_id: str  # For now, this field continues to hold the accession, despite the name. In the future, the plan is to replace all values in this field with the value from object_id. We will have to simply be aware for the interim that, although `file_id` refers to `FileUpload.id` in the rest of the spec, the naming here is an unfortunate collision with existing implementation. This field is still the object's primary identifier for now. An alternative solution is to rename this field to 'accession' during the immediate work, then migrate the name back to 'file_id' once official accession management is implemented.
 object_id: UUID4  # unchanged -- see note above
+bucket_id: str  # The name of the permanent storage bucket the file is stored in
 upload_date: UTCDatetime  # unchanged
 storage_alias: str  # renamed from s3_endpoint_alias
 secret_id: str      # renamed from decryption_secret_id
@@ -145,6 +148,7 @@ class FileUnderInterrogation(BaseModel):
     state: FileUploadState = "init"  # The state of the FileUpload
     state_updated: UTCDatetime  # Timestamp of when state was updated
     storage_alias: str  # A string identifying which Data Hub the file will be stored at
+    bucket_id: str  # The name of the inbox bucket where the file is stored
     decrypted_sha256: str  # SHA-256 checksum of the entire unencrypted file content
     decrypted_size: int  # The size of the unencrypted file
     part_size: int  # The number of bytes in each file part (last part is likely smaller)
@@ -161,6 +165,7 @@ class InterrogationReport(BaseModel):
     storage_alias: str  # A string identifying which Data Hub the file will be stored at
     interrogated_at: UTCDatetime # Timestamp showing when interrogation finished
     passed: bool
+    bucket_id: str | None  # Conditional upon success - interrogation bucket ID
     secret: SecretBytes | None = None  # Encrypted file encryption secret
     encrypted_parts_md5: list[str] | None = None  # Conditional upon success
     encrypted_parts_sha256: list[str] | None = None  # Conditional upon success
@@ -174,6 +179,7 @@ class ArchivableFileUpload(BaseModel):
     """Contains all the information needed for a file to be permanently archived"""
     id: UUID4
     storage_alias: str
+    bucket_id: str  # The name of the interrogation bucket where the file is stored
     secret_id: str
     decrypted_sha256: str
     decrypted_size: int
@@ -226,7 +232,7 @@ When a new `InterrogationSuccess` or `InterrogationFailure` event arrives, UCS:
 
 If the event is `InterrogationSuccess`, UCS also:
 - Sets `FileUpload.state` to `interrogated`
-- Sets `secret_id`, `state_updated`, `storage_alias`, `encrypted_parts_md5`, `encrypted_parts_sha265` based on the information in the event
+- Sets `secret_id`, `state_updated`, `storage_alias`, `bucket_id`, `encrypted_parts_md5`, `encrypted_parts_sha265` based on the information in the event
 
 However, if the event is `InterrogationFailure`, UCS sets `FileUpload.state` to `failed` and `FileUpload.state_updated` to `InterrogationFailure.interrogated_at`
 
@@ -280,7 +286,7 @@ The UCS needs the following config changes:
 - [ ] Add core behavior to handle `FileInternallyRegistered` events
 - [ ] Change existing deletion behavior to update `FileUpload.state` instead of actually deleting content.
 - [ ] Modify the logic for the "change box" endpoint to work with state field instead of booleans
-- [ ] Assign `storage_alias` to new file uploads
+- [ ] Assign `storage_alias` and `bucket_id` to new file uploads
 - [ ] Validate `storage_alias` when boxes are created by Data Stewards
 
 ---
@@ -507,9 +513,6 @@ If a checksum discrepancy is found, the DHFS rejects the upload and posts an `In
   - Decrypts the envelope using the configured private key (specific to the Data Hub)
   - Obtains the original file secret for decryption
   - Generates a new file secret for re-encryption
-  - Sends the new file secret to the FIS's HTTP API
-    - This is done right away instead of waiting to see if re-encryption is successful
-    - The secret is encrypted using the GHGA public key
   - Calculates the content starting position (offset) from the envelope length
   - Initiates a multipart upload with the Data Hub's `interrogation` bucket
   - Streams the object from the Data Hub's `inbox` bucket part-by-part using either `FileUpload.part_size` or an adjusted value that keeps both the part count under 10k and the part size evenly divisible by the cipher segment size for optimal processing.
@@ -551,7 +554,7 @@ The IFRS subscribes to `FileAccessionMap` events from the UOS. When a new one ar
 The IFRS subscribes to `FileUpload` outbox events from the UCS but only acts when it encounters an event with the state `awaiting_archival`. It further validates the event using the [ArchivableFileUpload schema](#archivablefileupload). If the event represents a valid `FileUpload`, IFRS first checks that it doesn't already have this file registered. If it's indeed a new upload, IFRS checks for an accession number in its accession mappings collection in the database. If no accession exists, the IFRS stores the `ArchivableFileUpload` data (a subset of `FileUpload`) in its pending files collection in the database. If an accession does exist, however, then the file registration procedure occurs.
 
 **File Registration Procedure**  
-IFRS copies the file from the `interrogation` bucket specified by `FileUpload.storage_alias` into the same location's `permanent` bucket. Once that is successful, the IFRS issues a `FileInternallyRegistered` event. This process is already in place within the IFRS, but some small tweaks are required. For example, the IFRS currently generates a *new* file ID when it registers a new file, meaning the a file would have one object ID in what is currently the inbox bucket, and a different object ID in permanent storage. This should change so the file ID is used as the object ID and remains constant from the time it is generated in the UCS through its lifespan at GHGA.
+IFRS copies the file from the `interrogation` bucket specified by `FileUpload.bucket_id` and `FileUpload.storage_alias` into the same location's `permanent` bucket. Once that is successful, the IFRS issues a `FileInternallyRegistered` event. This process is already in place within the IFRS, but some small tweaks are required. For example, the IFRS currently generates a *new* file ID when it registers a new file, meaning the a file would have one object ID in what is currently the inbox bucket, and a different object ID in permanent storage. This should change so the file ID is used as the object ID and remains constant from the time it is generated in the UCS through its lifespan at GHGA.
 
 #### A note on file IDs and file accessions in the IFRS
 In the future, file accessions will not exist in the file services. For now though, we will still identify files by the file ID and/or accession number depending on the context. For example, during file upload we point to files using the file ID, but during file download a user specifies a file using the accession number. There is no mechanism external to the file services that performs that linkage in a decoupled way -- but there will be, one day! For now, the IFRS will keep the accession as the primary key for the file metadata object. In the future, the primary key will be switched to the object ID/file ID and accessions will be scrubbed from the database.
@@ -572,10 +575,9 @@ The `file_metadata` collection needs the following changes:
 The `ifrsPersistedEvents` collection needs similar changes to the `payload` field:
 - Rename `file_id` to `accession`.
 - Rename `object_id` to `file_id`.
-- Delete `bucket_id`. This field is not used by anything.
 - Rename `s3_endpoint_alias` to `storage_alias`.
 - Rename `decryption_secret_id` to `secret_id`.
-- Delete `content_offset`.
+- Delete `content_offset` because it is always zero (files stored without envelope).
 - Rename `encrypted_part_size` to `part_size`.
 
 IFRS data migration should be moved to the init container style. Instead of executing `run_db_migrations()` as part of every entrypoint, the migrations should be run as their own command.
