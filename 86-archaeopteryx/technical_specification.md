@@ -111,25 +111,21 @@ Step 3: After "Generate an access token for upload" has been clicked, the upload
 
 Notes:
 
-Initially, the files will be auto-mapped using a simple string similarity comparison. This will also happen when the study or mapped field is changed, or when the "Reset" button is clicked. The mapped field ("name" or "alias") will be auto-selected when the study is changed to achieve the best mapping result.
+Initially, metadata file names with a matching file name in the upload box are mapped automatically. Only exact matches count, and casing may be only different if there is only one case insensitive match. All such exact matches are shown in green color on the right side.
 
 The "Filter by" field allows filtering by filename. It shall be possible to enter just a part of the file name or just an extension, like ".fastq". The filter should be case insensitive and match both metadata names and uploaded file names. If a filter is set, a highly visible button to remove the filter should appear.
 
-In the last column, warnings signs are shown for files that are unmapped or mapped to more than one file. When hovering over this sign a detailed explanation is shown as a tooltip (particularly, the names of the other files in case of conflicts).
+The table shall be sortable by clicking on one of the columns in the header row, including the last column. This allows sorting the names so that unmapped files (which have not file name in the right column) appear at the top. The default sorting should be by extension first, then by filename.
 
-In the last column, warning signs are shown for files that are unmapped or mapped to more than one file. When hovering over this sign, a detailed explanation is shown as a tooltip (particularly the names of the other files in case of conflicts).
+Above the table, the number of mapped and unmapped files from metadata, the number of exact matches, manually established links and unused (unmapped) files in the outbox shall be shown unless these numbers are zero.
 
-Mapped files should show a symbol indicating how closely the file names match.
+Below the table there should also be a paginator (same as for most other tables).
 
-The table shall be sortable by clicking on one of the columns in the header row, including the last column. This allows sorting the names so that problems appear at the top of the table.
-
-Below the table there should be also a paginator (same as for most other tables).
-
-When clicking on a line in the table with file names, an inline editor should appear for the name in the upload box. This editor should provide autocompletion using the same similarity search as used for the automatic mapping.
+When clicking on a line in the table, an inline editor should appear where the user can enter a file name in the upload box that shall be mapped. Also, a selection box should pop up below the inline editor that shows all unmapped files and narrows down as the user types in characters. Exact matches should appear at the top of the selection list, following by other names ordered in the same way as the right column. When clicking outside the field or the selection box, or when pressing "Enter", the selected file name shall be accepted if it exists in the upload box and is not yet mapped elsewhere. Otherwise, the entry in the mapped columns shall stay empty. This also allows removing an already established mapping.
 
 When clicking "Reset" or "Cancel" and manual mappings have already been made, the user needs to confirm the action.
 
-When clicking "Confirm mapping and archive" a confirmation dialog should pop up as well, explaining that the action is irrevocable and a checkbox must be checked off to proceed.
+When clicking "Confirm mapping and archive" a confirmation dialog should pop up as well, explaining that the action is irrevocable and a checkbox must be checked off to proceed. If not all files have been mapped, a dialog should pop up showing the number of unmapped files and the name of the first unmapped file and telling the user that all files need to be mapped.
 
 ## API Endpoints used by the frontend
 
