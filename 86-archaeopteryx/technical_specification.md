@@ -18,17 +18,19 @@ The implementation contains three parts:
 
 #### 1. Upload Box Manager
 
-An Upload Box Manager shall be integrated into the frontend. It shall be accessible by data stewards via the Admin menu and allow them to:
+An Upload Box Manager shall be added to the frontend. It shall be accessible by data stewards via the Admin menu and allow them to:
 
 - list available RDUBs
 - create a new RDUB for a specific user
 - close, lock and unlock RDUBs
 
+Additionally, an "Upload Grants" section should be added to the User Manager that shows the upload grants of the user and the corresponding RDUBs.
+
 #### 2. Upload Token Creation
 
 Users should be able to see all RDUBs that have been opened for them in a new section on their account page. For all RDUBs in the "open" state, the interface will show a button leading to a page that allows users to create an upload token for that RDUB. This should function similarly to the existing functionality for creating download tokens.
 
-The currently existing page on the "work-packages" path that was meant to support both download and upload tokens should be moved to the path "download" and adapted to only support download tokens. Since the upload tokens are now based on RDUBs instead of datasets, it does not make much sense anymore to handle them on the same page, but we should create upload tokens on a separate page using the "upload" path.
+The currently existing page on the "work-packages" path that was meant to support both download and upload tokens should be removed, and both upload and download tokens should be created directly on the account page using modals for entering the public key and showing the token.
 
 #### 3. Research Data File to Experimental Metadata File Mapping
 
@@ -49,7 +51,7 @@ This epic should only provide the necessary functionality so that it can be ship
 
 The epic does not implement a full self-service solution for managing the RDUBs by the users who are uploading the files and no integration to the planned metadata services. It also does not implement any additional backend functionality.
 
-The epic also does not include a complete Upload Grant Manager. This could be later added later, similarly to the (Download) Access Grant Manager. For now, access grants are managed via the Upload Box Details Page.
+The epic also does not include a complete Upload Grant Manager. This could be later added later, similarly to the (Download) Access Grant Manager. For now, upload grants are managed via the Upload Box Details Page and are also listed on the user detail page in the User Manager.
 
 ## User Journeys
 
@@ -69,7 +71,11 @@ This epic covers the following user journeys:
 
 ### Upload Box Manager
 
+List of all upload boxes with filter controls:
+
 ![Upload Box Manager](./images/upload_box_manager.png)
+
+Optionally, the grantee(s) could also be shown in the list and in the filter.
 
 Detail view for an open upload box:
 
@@ -85,25 +91,29 @@ Detail view for a locked upload box:
 
 ### RDUB section on User Account Page
 
-![RDUB section on User Account Page](./images/rdub_section_on_account_page.png)
+![RDUB section on User Account Page](./images/account_page.png)
 
-Note: The buttons only appear if there is an open and accessible research data upload box assigned to the user.
+Notes:
+
+Only open RDUBs for which access has been granted to the user will appear here.
+
+In the case that an upload grant does not have an IVA or the IVA is not yet verified, a warning will be shown.
+
+When the "finish" button is clicked, the user will be asked for confirmation to close the box since this this cannot be reverted only by a data steward, and the box will be closed.
 
 ### Upload Token Creation
 
-Step 1: Selection of the upload box:
+Step 2: After the "create token" button next to the upload box on the account page has been clicked, the detailed description is shown and the user's public Crypt4GH key is requested:
 
-![Upload Research Data, Step 1](./images/upload_research_data_step_1.png)
+![Create upload token, step 1](./images/create_token_step_1.png)
 
-Step 2: After the upload box has been selected, the detailed description is shown and input fields to either finish the upload or create an upload token:
+Notes:
 
-![Upload Research Data, Step 2](./images/upload_research_data_step_2.png)
+The button will only be enabled when the Crypt4GH key has been entered.
 
-Note: The button only appears when the Crypt4GH key has been entered. If "finish upload" has been checked, the control to enter the public key will disappear and a button with the text "Lock the upload box" will appear instead.
+Step 2: After "Generate an access token for upload" has been clicked, the upload token will be shown once:
 
-Step 3: After "Generate an access token for upload" has been clicked, the upload token will be shown once:
-
-![Upload Research Data, Step 3](./images/upload_research_data_step_3.png)
+![Create upload token, step 2](./images/create_token_step_2.png)
 
 ### Research Data Mapping Tool
 
