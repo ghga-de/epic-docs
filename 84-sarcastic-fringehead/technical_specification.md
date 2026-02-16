@@ -36,18 +36,10 @@ All user journeys are already detailed in Lynx Boreal. The operations added in t
 
 ### Payload Schemas for Events:
 
-#### UploadBoxState
-```python
-# Renamed from ResearchDataUploadBoxState
-OPEN = "open"
-LOCKED = "locked"
-ARCHIVED = "archived"  # This used to be `CLOSED = "closed"`
-```
-
 #### ResearchDataUploadBox
 ```python
 id: UUID4
-state: UploadBoxState
+state: Literal["open", "locked", "archived"]
 title: str
 description: str
 last_changed: UTCDatetime
@@ -62,7 +54,7 @@ storage_alias: str
 #### FileUploadBox
 ```python
 id: UUID4
-state: UploadBoxState
+state: Literal["open", "locked", "archived"]
 file_count: int
 size: int
 storage_alias: str
@@ -93,6 +85,7 @@ bucket_id: str  # The name of the bucket where the file currently resides
 secret_id: str | None
 decrypted_sha256: str | None  # SHA-256 checksum of the entire unencrypted file content
 decrypted_size: int     # The size of the unencrypted file
+encrypted_size: int | None # The size of the encrypted file - when in the inbox, this includes the encryption envelope. This value is None until the file is in the inbox.
 part_size: int  # The number of bytes in each file part (last part is likely smaller)
 encrypted_parts_md5: list[str] | None     # Is None until DHFS finishes with file
 encrypted_parts_sha256: list[str] | None  # Is None until DHFS finishes with file
@@ -124,14 +117,14 @@ reason: str  # The text of the error that caused interrogation to fail
 ```python
 # content_offset is removed because objects are stored without an envelope
 # bucket_id is removed because storage_alias should already point to specific bucket
-file_id: str  # For now, this field continues to hold the accession, despite the name. In the future, the plan is to replace all values in this field with the value from object_id. We will have to simply be aware for the interim that, although `file_id` refers to `FileUpload.id` in the rest of the spec, the naming here is an unfortunate collision with existing implementation. This field is still the object's primary identifier for now. An alternative solution is to rename this field to 'accession' during the immediate work, then migrate the name back to 'file_id' once official accession management is implemented.
-object_id: UUID4  # unchanged -- see note above
+file_id: str  #  Renamed from object ID. This same field used to hold the accession.
+accession: str  # The accession number assigned to the file
 bucket_id: str  # The name of the permanent storage bucket the file is stored in
-upload_date: UTCDatetime  # unchanged
+archive_date: UTCDatetime  # renamed from upload_date
 storage_alias: str  # renamed from s3_endpoint_alias
 secret_id: str      # renamed from decryption_secret_id
 decrypted_size: int     # unchanged
-encrypted_size: int     # new field
+encrypted_size: int     # unchanged
 decrypted_sha256: str   # unchanged
 part_size: int  # renamed from encrypted_part_size
 encrypted_parts_md5: list[str]    # unchanged
@@ -172,10 +165,10 @@ class InterrogationReport(BaseModel):
     reason: str | None = None  # Conditional upon failure, contains reason for failure
 ```
 
-#### ArchivableFileUpload
+#### PendingFileUpload
 > This schema represents what IFRS checks for validation when consuming a `FileUpload` event with the `awaiting_archival` state. It is not itself an event schema.
 ```python
-class ArchivableFileUpload(BaseModel):
+class PendingFileUpload(BaseModel):
     """Contains all the information needed for a file to be permanently archived"""
     id: UUID4
     storage_alias: str
@@ -183,6 +176,7 @@ class ArchivableFileUpload(BaseModel):
     secret_id: str
     decrypted_sha256: str
     decrypted_size: int
+    encrypted_size: int
     part_size: int
     encrypted_parts_md5: list[str]
     encrypted_parts_sha256: list[str]
@@ -327,7 +321,7 @@ The UOS gets updates to the following existing endpoints:
 - [ ] Add the new API endpoint described above
 - [ ] Add the FileAccessionMap definition somewhere in the UOS (not in a library)
 - [ ] Rename final box state to `archived` instead of `closed`
-- [ ] Add a new `"archive"` option to the `ChangeFileBoxWorkOrder` for the work type literal" that represents final, permanent sealing of `FileUploadBox`
+- [ ] Add a new `"archive"` option to the `ChangeFileBoxWorkOrder` for the work type literal that represents final, permanent sealing of `FileUploadBox`
 - [ ] Add an event publisher for `FileAccessionMap` events
 - [ ] Add a DAO for file accession data
 - [ ] Add an outbound UCS call in the `FileBoxClient` with the same structure as `lock_file_upload_box()` and `unlock_file_upload_box()`, called `archive_file_upload_box()`
@@ -549,15 +543,15 @@ The DHFS needs the following configuration:
 The role of the IFRS is to shepherd files into archival, by copying them from a Hub's `interrogation` bucket into the `permanent` bucket located at the same Data Hub. This only occurs once the Data Hub in question has completed the interrogation process, as detailed in the [DHFS section](#dhfs) above. This is the last step for a file in the Upload Path. Unlike the FIS and DHFS, the IFRS operates only as an event consumer. The other responsibility of the IFRS is to listen for inbound `FileAccessionMap` events.
 
 #### IFRS Event Consumer
-The IFRS subscribes to `FileAccessionMap` events from the UOS. When a new one arrives, the IFRS first checks each accession in the map to make sure there isn't already a `DrsObject` with the same accession. If there is, it verifies that the S3 object ID matches the file ID in the received mapping and log it as *critical* if there's a discrepancy. If no `DrsObject` yet exists, then IFRS proceeds to look for an `ArchivableFileUpload` in its database (this is a `FileUpload` with a state of `awaiting_archival`). If no such entry exists, IFRS merely updates its accession mappings collection with the received information. If an entry does exist, however, then IFRS combines the `ArchivableFileUpload` data and the accession in order to perform the file registration procedure.
+The IFRS subscribes to `FileAccessionMap` events from the UOS. When a new one arrives, the IFRS first checks each accession in the map to make sure there isn't already a `DrsObject` with the same accession. If there is, it verifies that the S3 object ID matches the file ID in the received mapping and log it as *critical* if there's a discrepancy. If no `DrsObject` yet exists, then IFRS proceeds to look for an `PendingFileUpload` in its database (this is a `FileUpload` with a state of `awaiting_archival`). If no such entry exists, IFRS merely updates its accession mappings collection with the received information. If an entry does exist, however, then IFRS combines the `PendingFileUpload` data and the accession in order to perform the file registration procedure.
 
-The IFRS subscribes to `FileUpload` outbox events from the UCS but only acts when it encounters an event with the state `awaiting_archival`. It further validates the event using the [ArchivableFileUpload schema](#archivablefileupload). If the event represents a valid `FileUpload`, IFRS first checks that it doesn't already have this file registered. If it's indeed a new upload, IFRS checks for an accession number in its accession mappings collection in the database. If no accession exists, the IFRS stores the `ArchivableFileUpload` data (a subset of `FileUpload`) in its pending files collection in the database. If an accession does exist, however, then the file registration procedure occurs.
+The IFRS subscribes to `FileUpload` outbox events from the UCS but only acts when it encounters an event with the state `awaiting_archival`. It further validates the event using the [PendingFileUpload schema](#PendingFileUpload). If the event represents a valid `PendingFileUpload`, IFRS first checks that it doesn't already have this file registered. If it's indeed a new upload, IFRS checks for an accession number in its accession mappings collection in the database. If no accession exists, the IFRS stores the `PendingFileUpload` in its pending files collection in the database. If an accession does exist, however, then the file registration procedure occurs.
 
 **File Registration Procedure**  
 IFRS copies the file from the `interrogation` bucket specified by `FileUpload.bucket_id` and `FileUpload.storage_alias` into the same location's `permanent` bucket. Once that is successful, the IFRS issues a `FileInternallyRegistered` event. This process is already in place within the IFRS, but some small tweaks are required. For example, the IFRS currently generates a *new* file ID when it registers a new file, meaning the a file would have one object ID in what is currently the inbox bucket, and a different object ID in permanent storage. This should change so the file ID is used as the object ID and remains constant from the time it is generated in the UCS through its lifespan at GHGA.
 
 #### A note on file IDs and file accessions in the IFRS
-In the future, file accessions will not exist in the file services. For now though, we will still identify files by the file ID and/or accession number depending on the context. For example, during file upload we point to files using the file ID, but during file download a user specifies a file using the accession number. There is no mechanism external to the file services that performs that linkage in a decoupled way -- but there will be, one day! For now, the IFRS will keep the accession as the primary key for the file metadata object. In the future, the primary key will be switched to the object ID/file ID and accessions will be scrubbed from the database.
+In the future, file accessions will not exist in the file services. For now though, we will still identify files by the file ID and/or accession number depending on the context. For example, during file upload we point to files using the file ID, but during file download a user specifies a file using the accession number. There is no mechanism external to the file services that performs that linkage in a decoupled way -- but there will be, one day! 
 
 Finally, the UUID4 file IDs generated by the recently revamped UCS during file upload are now also used as the object IDs in S3 storage. This does not have to be the case, and we can choose to generate a separate object ID if that layer of indirection is desired. At the time of writing though, this is not planned.
 
@@ -566,21 +560,30 @@ Finally, the UUID4 file IDs generated by the recently revamped UCS during file u
 #### Migrating existing IFRS data
 The `file_metadata` collection needs the following changes:
 - Remove `content_offset` field. The encrypted files are stored without an envelope, meaning the content offset is always 0.
-- Rename `object_id` to `file_id`.
+- Rename `object_id` to `file_id` (`_id` in the database).
 - Rename `object_size` to `encrypted_size`.
 - Rename `decryption_secret_id` to merely `secret_id`.
 - Rename `encrypted_part_size` to `part_size`.
 - The list `encrypted_parts_sha256` is not currently used, but we are going to keep it for now. Originally the idea was for it to serve as another integrity check, but currently we only use the decrypted content's SHA-256 and the encrypted content's MD5 checksums for verification. In the spirit of "better to have it and not need it", we will keep this data (and continue producing it during re-encryption) for the time being.
 
 The `ifrsPersistedEvents` collection needs similar changes to the `payload` field:
-- Rename `file_id` to `accession`.
-- Rename `object_id` to `file_id`.
+- Rename `file_id` (`_id` in the database) to `accession`.
+- Rename `object_id` to `_id` to make it the primary field.
 - Rename `s3_endpoint_alias` to `storage_alias`.
 - Rename `decryption_secret_id` to `secret_id`.
 - Delete `content_offset` because it is always zero (files stored without envelope).
 - Rename `encrypted_part_size` to `part_size`.
+- Replace the accession number in the compaction key field (`_id`) with the file ID
+- Replace the value of the event `key` field with the file ID
+
+Likewise, the `ifrsPersistedEvents` collection needs updates to the top-level fields:
+- Set `published` to False
+- Set `key` to the stringified UUID4 `file_id`
+- Replace the accession value in the compaction key field (`_id`) with the file ID
 
 IFRS data migration should be moved to the init container style. Instead of executing `run_db_migrations()` as part of every entrypoint, the migrations should be run as their own command.
+
+> **Once IFRS data is migrated, all persisted events should be republished**.
 
 #### IFRS Configuration
 - EventSubConfig:
@@ -588,13 +591,10 @@ IFRS data migration should be moved to the init container style. Instead of exec
   - Topic and type for `FileAccessionMap` events
 
 #### Work to be performed for the IFRS
-- [ ] Add local definition for `ArchivableFileUpload`
-- [ ] Add event subscriber for `InterrogationReport` events
-- [ ] Add outbox subscriber for `ResearchDataUploadBox` events
+- [ ] Add local definition for `PendingFileUpload`
 - [ ] Add event subscriber for `FileAccessionMap` events
-- [ ] Add DAO for `ArchivableFileUpload` and `FileAccessionMap` data
-- [ ] Upon encountering an ARCHIVED `ResearchDataUploadBox`, retrieve the list of relevant files from the local store of `InterrogationReport` events
-- [ ] Copy each file from the `interrogation` bucket to the IFRS's permanent bucket
+- [ ] Add DAO for `PendingFileUpload` and `FileAccessionMap` data
+- [ ] Upon receiving a `FileUpload` with the state `awaiting_archival`, copy the file from the `interrogation` bucket to the IFRS's permanent bucket
 - [ ] Get the updated `ghga-event-schemas` version and adapt IFRS for changes to `FileInternallyRegistered`
 - [ ] Migrate existing data in the `file_metadata` collection
 - [ ] Create new collection to preserve existing file accession-to-file ID associations
@@ -605,7 +605,7 @@ IFRS data migration should be moved to the init container style. Instead of exec
 ---
 
 ### DINS:
-The Dataset Information Service (DINS) is only relevant here because it consumes `FileInternallyRegistered` events, stores that info in its database, and provides the information to public via HTTP API. DINS needs to be updated to use the new `FileInternallyRegistered` event schema. The data in the database already uses different field names, so no migration should be necessary.
+The Dataset Information Service (DINS) is only relevant here because it consumes `FileInternallyRegistered` events, stores that info in its database, and provides the information to public via HTTP API. DINS needs to be updated to use the new `FileInternallyRegistered` event schema. The data in the database already uses different field names, so no migration should be necessary. However, the code verbiage should be updated because it currently uses `file_id` to refer to a file accession. So instances of `file_id` should be changed to `accession`.
 
 #### Work to be performed for the DINS
 - [ ] Get the updated `ghga-event-schemas` version and adapt DINS for changes to `FileInternallyRegistered`. 
@@ -614,6 +614,12 @@ The Dataset Information Service (DINS) is only relevant here because it consumes
 
 ### DCS:
 The DCS subscribes to `FileInternallyRegistered` events from the IFRS to learn about which files are available for download from GHGA. The changes in that event schema, which are described in the [schema definition](#fileinternallyregistered) above, necessitate database migrations and code updates in the DCS.
+
+To make the file ID consistent across file services, the DCS should be modified so that
+when it receives a `FileInternallyRegistered` event it updates the file ID stored on
+the DRS object in its database. This could result in a one-time interruption for any
+ongoing downloads, which will have to be restarted once the IFRS stages the same file to
+the download bucket with the new object ID.
 
 #### Migrating existing DCS data
 The `drs_objects` collection needs the following migration changes applied:
