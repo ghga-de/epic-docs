@@ -212,7 +212,99 @@ When manually triggered—or when the configuration changes—the service derive
 The validation (including the model derivation) should be protected by a global lock that would prevent other instances of the service from running the validation and model derivation in parallel, and would also stop the processing of AnnotatedEMPack transformations while the lock is active.
 
 This lock could be implemented via a special "lock" collection in the database that would contain a certain document while the lock is active.
+Details of a proposed solution are provided in the next section.
 
+#### Distributed Config Update using a Lock Document
+
+
+
+### Problem
+
+Multiple service instances starting simultaneously must coordinate so that only **one** performs config validation, schema derivation, and DB writes. Others wait and then read the result.
+
+### Lock Collection
+
+A `config_lock` collection holds a single document while the lock is active. A TTL index auto-expires it if the holder crashes.
+
+```python
+# One-time index setup (during DB initialization)
+await db["config_lock"].create_index("acquired_at", expireAfterSeconds=120)
+```
+
+### Lock Document
+
+```python
+{
+    "_id": "config_update_lock",
+    "holder_id": "<pid>@<uuid>",      # unique per instance
+    "acquired_at": ISODate("..."),     # used by TTL index
+}
+```
+
+### Acquire
+
+```python
+from pymongo.errors import DuplicateKeyError
+
+async def try_acquire_lock(db, holder_id: str) -> bool:
+    try:
+        await db["config_lock"].insert_one({
+            "_id": "config_update_lock",
+            "holder_id": holder_id,
+            "acquired_at": datetime.now(timezone.utc),
+        })
+        return True
+    except DuplicateKeyError:
+        return False
+```
+
+### Release
+
+```python
+async def release_lock(db, holder_id: str) -> None:
+    await db["config_lock"].delete_one({
+        "_id": "config_update_lock",
+        "holder_id": holder_id,
+    })
+```
+
+### Wait
+
+```python
+async def wait_for_lock_release(db, poll_interval=2.0, timeout=180.0):
+    elapsed = 0.0
+    while elapsed < timeout:
+        if await db["config_lock"].find_one({"_id": "config_update_lock"}) is None:
+            return
+        await asyncio.sleep(poll_interval)
+        elapsed += poll_interval
+    raise TimeoutError("Config update lock was not released in time.")
+```
+
+### Startup Flow
+
+```text
+Instance A (lock winner)                Instance B (waiter)
+────────────────────────                ─────────────────────
+1. insert lock doc → OK                1. insert lock doc → DuplicateKeyError
+2. Validate config                     2. Poll lock collection
+3. Derive schemas                         ...
+4. Persist to DB                       3. Lock doc gone →
+5. Delete lock doc                     4. Read config from DB
+```
+
+### Blocking Event Processing
+
+Before processing an `AnnotatedEMPack` transformation, check for the lock:
+
+```python
+if await db["config_lock"].find_one({"_id": "config_update_lock"}):
+    await wait_for_lock_release(db)
+```
+
+### Crash Safety
+
+If the holder dies without releasing, the **TTL index** on `acquired_at` automatically deletes the stale lock document after the configured expiry (120 s), allowing another instance to proceed.
 
 #### User Journeys: Service Consumer Transforms An Original AnnotatedEMPack
 
