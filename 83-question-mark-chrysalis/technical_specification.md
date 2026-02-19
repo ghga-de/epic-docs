@@ -218,7 +218,7 @@ A separate lock collection containing one lock document can be used to deal with
 During service startup, all services will first try to write a lock document.
 If a lock document already exists, this will fail and either 1) exactly one service is currently doing the config comparison and validation step or 2) the existing lock document is stale, because a service has crashed during the config comparison and validation step.
 
-The remaining services will wait and poll until the lock get's released and continue with loading the current service config from the database afterwards.
+The remaining services will wait and poll until the lock gets released and continue with loading the current service config from the database afterwards.
 
 If a service instance has passed the startup phase, there are two further places where it has to check for an existing lock to ascertain that it is working with the latest information and performs the least possible amount of work that's no longer relevant:
 1) Before fetching a new AEMPack to process
