@@ -170,7 +170,7 @@ On startup, the service reads all Models, Workflows and Routes from a config YAM
 
 If the content of the config YAML file corresponds to what is stored in the database, the service continues to use the known-valid and pre-computed config from the database. If there are any changes in the YAML config, it will be validated, and the missing information (derived schemas, ordering) re-computed. If there are any errors, the YAML config will be rejected, otherwise stored in the database as new configuration.
 
-AnnotatedEMPacks are populated from incoming events (from the GHGA Study Repository) and transformation outputs. Only published data is stored persistently (using an outbox DAO). Intermediate transformed data is kept in memory as long as they are needed for running a full transformation graph corresponding to a single original piece of data, as explained in a later section..
+AnnotatedEMPacks are populated from incoming events (from the GHGA Study Repository) and transformation outputs. Only published data is stored persistently (using an outbox DAO). Intermediate transformed data is kept in memory as long as they are needed for running a full transformation graph corresponding to a single original piece of data, as explained in a later section.
 
 #### Transformation Configuration
 
@@ -211,100 +211,91 @@ When manually triggered—or when the configuration changes—the service derive
 
 The validation (including the model derivation) should be protected by a global lock that would prevent other instances of the service from running the validation and model derivation in parallel, and would also stop the processing of AnnotatedEMPack transformations while the lock is active.
 
-This lock could be implemented via a special "lock" collection in the database that would contain a certain document while the lock is active.
-Details of a proposed solution are provided in the next section.
-
 #### Distributed Config Update using a Lock Document
 
+A separate lock collection containing one lock document can be used to deal with config updates across different instances with a shared database.
 
+During service startup, all services will first try to write a lock document.
+If a lock document already exists, this will fail and either 1) exactly one service is currently doing the config comparison and validation step or 2) the existing lock document is stale, because a service has crashed during the config comparison and validation step.
 
-### Problem
+The remaining services will wait and poll until the lock get's released and continue with loading the current service config from the database afterwards.
 
-Multiple service instances starting simultaneously must coordinate so that only **one** performs config validation, schema derivation, and DB writes. Others wait and then read the result.
+If a service instance has passed the startup phase, there are two further places where it has to check for an existing lock to ascertain that it is working with the latest information and performs the least possible amount of work that's no longer relevant:
+1) Before fetching a new AEMPack to process
+2) Before sending a derived AEMPack to the outbox publisher
 
-### Lock Collection
+The second check will need to retrieve some additional information based on its input datapack after the lock has been released, checking if the source datapack has been flagged as dirty in the meantime and subsequently discard the derived datapack if that's the case.
 
-A `config_lock` collection holds a single document while the lock is active. A TTL index auto-expires it if the holder crashes.
+To ensure that instances crashing while holding the lock don't block processing forever, the lock document should be subject to a TTL and removed automatically.
 
-```python
-# One-time index setup (during DB initialization)
-await db["config_lock"].create_index("acquired_at", expireAfterSeconds=120)
-```
+MongoDB has functionality to deal with this automatically by creating a TTL index on a date field.
+The handling of this functionality means abandoning hexkit abstractions at that point and deal directly with PyMongo. 
 
-### Lock Document
+##### Lock Document
 
 ```python
 {
-    "_id": "config_update_lock",
-    "holder_id": "<pid>@<uuid>",      # unique per instance
-    "acquired_at": ISODate("..."),     # used by TTL index
+   "_id": "config_update_lock",
+   "service_id": service_instance_id, # unique per instance
+   "acquired_at": datetime, # for autoexpiry with TTL index
 }
 ```
 
-### Acquire
+##### Lock Collection
+
+A `config_lock` collection holds a single document while the lock is active. If the holder dies without releasing, the **TTL index** on `acquired_at` automatically deletes the stale lock document after the configured expiration time, allowing another instance to proceed.
 
 ```python
-from pymongo.errors import DuplicateKeyError
-
-async def try_acquire_lock(db, holder_id: str) -> bool:
-    try:
-        await db["config_lock"].insert_one({
-            "_id": "config_update_lock",
-            "holder_id": holder_id,
-            "acquired_at": datetime.now(timezone.utc),
-        })
-        return True
-    except DuplicateKeyError:
-        return False
+await db["config_lock"].create_index("acquired_at", expireAfterSeconds=<expiration time in seconds>)
 ```
 
-### Release
+##### Acquire
+
+```python
+async def try_acquire_lock(db, service_instance_id: str) -> bool:
+   try:
+      await db["config_lock"].insert_one({
+         "_id": "config_update_lock",
+         "service_id": service_instance_id,
+         "acquired_at": datetime.now(timezone.utc),
+      })
+      return True
+   except DuplicateKeyError:
+      return False
+```
+
+##### Release
 
 ```python
 async def release_lock(db, holder_id: str) -> None:
-    await db["config_lock"].delete_one({
-        "_id": "config_update_lock",
-        "holder_id": holder_id,
+   await db["config_lock"].delete_one({
+      "_id": "config_update_lock",
+      "service_id": service_instance_id,
     })
 ```
 
-### Wait
+##### Wait
 
 ```python
-async def wait_for_lock_release(db, poll_interval=2.0, timeout=180.0):
-    elapsed = 0.0
-    while elapsed < timeout:
-        if await db["config_lock"].find_one({"_id": "config_update_lock"}) is None:
-            return
-        await asyncio.sleep(poll_interval)
-        elapsed += poll_interval
-    raise TimeoutError("Config update lock was not released in time.")
+async def wait_for_lock_release(db, poll_interval=5.0):
+   while True:
+      if await db["config_lock"].find_one({"_id": "config_update_lock"}) is None:
+         break
+      await asyncio.sleep(poll_interval)
 ```
+This could also include a timeout for if the process takes much longer than anticipated and it's likely, that something unexpected happened during the startup procedure.
+If a timeout is implemented, then it should allow for sufficiently long time during which the DB can automatically remove a stale lock document.
+According to the MongoDB documentation, TTL index cleanup is only performed once every 60s and might be further delayed by the current load on the database.
+Thus the minimum to handle the worst case should be 60s + configured expiry (in seconds) + another few seconds.
 
-### Startup Flow
+##### Blocking Event Processing
 
-```text
-Instance A (lock winner)                Instance B (waiter)
-────────────────────────                ─────────────────────
-1. insert lock doc → OK                1. insert lock doc → DuplicateKeyError
-2. Validate config                     2. Poll lock collection
-3. Derive schemas                         ...
-4. Persist to DB                       3. Lock doc gone →
-5. Delete lock doc                     4. Read config from DB
-```
-
-### Blocking Event Processing
-
-Before processing an `AnnotatedEMPack` transformation, check for the lock:
+Before processing an `AnnotatedEMPack` transformation or writing the derived `AnnotatedEMPack`, check for the lock:
 
 ```python
 if await db["config_lock"].find_one({"_id": "config_update_lock"}):
     await wait_for_lock_release(db)
 ```
-
-### Crash Safety
-
-If the holder dies without releasing, the **TTL index** on `acquired_at` automatically deletes the stale lock document after the configured expiry (120 s), allowing another instance to proceed.
 
 #### User Journeys: Service Consumer Transforms An Original AnnotatedEMPack
 
