@@ -227,9 +227,10 @@ If a service instance has passed the startup phase, there are two further places
 The second check will need to retrieve some additional information based on its input datapack after the lock has been released, checking if the source datapack has been flagged as dirty in the meantime and subsequently discard the derived datapack if that's the case.
 
 To ensure that instances crashing while holding the lock don't block processing forever, the lock document should be subject to a TTL and removed automatically.
+Service instances that wait for the lock to be released should log a corresponding message the first time they fail to acquire it.
+An exception should be raised if the lock is not released after waiting for a configurable timeout period.
 
-MongoDB has functionality to deal with this automatically by creating a TTL index on a date field.
-The handling of this functionality means abandoning hexkit abstractions at that point and deal directly with PyMongo. 
+Hexkit has functionality to create database indices that can be used to deal with lock document cleanup automatically by creating a TTL index on a date field.
 
 ##### Lock Document
 
@@ -277,14 +278,17 @@ async def release_lock(db, holder_id: str) -> None:
 ##### Wait
 
 ```python
-async def wait_for_lock_release(db, poll_interval=5.0):
-   while True:
+async def wait_for_lock_release(db, poll_interval=5, timeout=120):
+   elapsed = 0
+   while elapsed <= timeout:
       if await db["config_lock"].find_one({"_id": "config_update_lock"}) is None:
          break
+      elapsed += poll_interval
       await asyncio.sleep(poll_interval)
+   raise TimeoutError(f"Lock was not released within the configured timeout of {timeout}s.")
 ```
-This could also include a timeout for if the process takes much longer than anticipated and it's likely, that something unexpected happened during the startup procedure.
-If a timeout is implemented, then it should allow for sufficiently long time during which the DB can automatically remove a stale lock document.
+This should include a timeout for if the process takes much longer than anticipated and it's likely, that something unexpected happened during the startup procedure.
+The timeout should allow for a sufficiently long time during which the DB can automatically remove a stale lock document.
 According to the MongoDB documentation, TTL index cleanup is only performed once every 60s and might be further delayed by the current load on the database.
 Thus the minimum to handle the worst case should be 60s + configured expiry (in seconds) + another few seconds.
 
