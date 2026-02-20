@@ -216,7 +216,7 @@ The validation (including the model derivation) should be protected by a global 
 A separate lock collection containing one lock document can be used to deal with config updates across different instances with a shared database.
 
 During service startup, all services will first try to write a lock document.
-If a lock document already exists, this will fail and either 1) exactly one service is currently doing the config comparison and validation step or 2) the existing lock document is stale, because a service has crashed during the config comparison and validation step.
+If a lock document already exists, this will fail which means that either 1) exactly one service is currently doing the config comparison and validation step or 2) the existing lock document is stale, because a service has crashed during the config comparison and validation step.
 
 The remaining services will wait and poll until the lock gets released and continue with loading the current service config from the database afterwards.
 
