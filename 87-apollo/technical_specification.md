@@ -48,6 +48,7 @@ The following features are not included in the first version of the study regist
 - Frontend to ingest submissions and manage dynamic administrative metadata and lookups.
 - Populating and updating lookup tables from existing dictionaries and ontologies.
 - Implementation of the EM validation service.
+- Audit logging.
 
 ## Implementation Details
 
@@ -265,6 +266,8 @@ A newly submitted study shall always be created with the status `PENDING`. When 
 After the submission has been successfully validated and moved to the status `PERSISTED`, the service will create new accession numbers for all resources contained in the EM and store these in the database as Accession, AltAccession, and EmAccessionMap entities.
 
 The service will then create an AnnotatedEMPack and publish it as an event, as described further below.
+
+TODO: mention file id mapping functionality as well
 
 ### Validation
 
