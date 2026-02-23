@@ -231,6 +231,8 @@ Service instances that wait for the lock to be released should log a correspondi
 An exception should be raised if the lock is not released after waiting for a configurable timeout period.
 
 Hexkit has functionality to create database indices that can be used to deal with lock document cleanup automatically by creating a TTL index on a date field.
+Currently this functionality does not support recreating indices, which would be necessary when the TTL config parameter changes.
+Updating/recreating the index will be handled by lower level PyMongo abstractions as long as the functionality remains unimplemented in Hexkit.
 
 ##### Lock Document
 
@@ -287,10 +289,10 @@ async def wait_for_lock_release(db, poll_interval=5, timeout=120):
       await asyncio.sleep(poll_interval)
    raise TimeoutError(f"Lock was not released within the configured timeout of {timeout}s.")
 ```
-This should include a timeout for if the process takes much longer than anticipated and it's likely, that something unexpected happened during the startup procedure.
-The timeout should allow for a sufficiently long time during which the DB can automatically remove a stale lock document.
+This should include a timeout to handle cases where the process takes much longer than anticipated and it's likely, that something unexpected happened during the startup procedure.
+The timeout should be set long enough to allow the DB to automatically remove a stale lock document.
 According to the MongoDB documentation, TTL index cleanup is only performed once every 60s and might be further delayed by the current load on the database.
-Thus the minimum to handle the worst case should be 60s + configured expiry (in seconds) + another few seconds.
+Thus the minimum to handle the worst case should be 60s + configured expiry (in seconds) + another few seconds to account for load.
 
 ##### Blocking Event Processing
 
