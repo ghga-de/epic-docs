@@ -230,8 +230,8 @@ To ensure that instances crashing while holding the lock don't block processing 
 Service instances that wait for the lock to be released should log a corresponding message the first time they fail to acquire it.
 An exception should be raised if the lock is not released after waiting for a configurable timeout period.
 
-Hexkit has functionality to create database indices that can be used to deal with lock document cleanup automatically by creating a TTL index on a date field.
-Currently this functionality does not support recreating indices, which would be necessary when the TTL config parameter changes.
+Hexkit contains functionality to create database indices that can be used to deal with lock document cleanup automatically by creating a TTL index on a date field.
+Currently this functionality does not support dynamically recreating indices, which would be needed when the TTL config parameter changes.
 Updating/recreating the index will be handled by lower level PyMongo abstractions as long as the functionality remains unimplemented in Hexkit.
 
 ##### Lock Document
