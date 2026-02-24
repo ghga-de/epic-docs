@@ -52,7 +52,7 @@ The following features are not included in the first version of the study regist
 
 ## Implementation Details
 
-### Managed Entity Models
+### Managed Entities
 
 #### Study
 
@@ -398,36 +398,83 @@ TODO
 - POST /submissions: Post a submission
 - ...
 
-#### `POST /studies`
+#### Study
+
+##### `POST /studies`
 - Auth: internal auth token with data steward role
-- Request Body: Study (without `id`, `created`)
-- Response Body: {`id`: PID}
+- Request Body: Study (without `id`, `status`, `users`, `created`)
+- Response Body: Study
 - Returns: 201 or error code
 
 The PID will be automatically created.
 
-#### `GET /studies/{id}`
-- Auth: internal auth token
+After this request, the new Study will have the status `PENDING` and an empty list of `users`.
+
+##### `GET /studies`
+- Auth: internal auth token (optional)
+- Query parameters (all optional):
+  - `status: StudyStatus` - filter for specific status
+  - `type: StudyType` - filter for specific type
+  - `text: str` - text filter (partial match in any plain text field)
+  - `skip: int`, `limit: int`: used for pagination
+- Response Body: list[Study]
+- Returns: 200 or error code
+
+Only returns studies that are either public or accessible to the user (i.e. the user must be a data steward of access must have been granted to the user).
+
+##### `GET /studies/{id}`
+- Auth: internal auth token (optional)
 - Response Body: Study
 - Returns: 200 or error code
 
-If the study is not public and the user is not granted access to the study, returns error code 403.
+if the study is not public, the auth token is required. In this case, if the user is not a data steward and the user is not granted access to the study, returns error code 403.
 
-#### `POST /metadata`
+##### `PATCH /studies/{id}`
+- Auth: internal auth token with data steward role
+- Request Body: new `status` and `users`
+- Returns: 204 or error code
+
+The `status` can only be moved from `PENDING` to `PERSISTED`, otherwise returns error code 409. The `users` can be set to `None` or a list of user IDs, even when the `status` is already `PERSISTED`. 
+
+##### `DELETE /studies/{id}`
+- Auth: internal auth token with data steward role
+- Returns: 200 or error code
+
+The study must have the status `PENDING`, otherwise returns error code 409.
+
+Will also delete the corresponding experimental metadata, publications and dataset, and all corresponding accessions.
+
+#### ExperimentalMetadata
+
+##### `POST /metadata`
 - Auth: internal auth token with data steward role
 - Request Body: ExperimentalMetadata (without `submitted`)
 - Returns: 204
 
-#### `GET /metadata/{id}`
-- Auth: internal auth token
+Will upsert a corresponding ExperimentalMetadata instance.
+
+The corresponding study must have the status `PENDING`, otherwise returns error code 409.
+
+##### `GET /metadata/{id}`
+- Auth: internal auth token with data steward role
 - Response Body: ExperimentalMetadata
 - Returns: 200 or error code
 
 The `id` must be the PID of the corresponding study.
 
-If the corresponding study is not public and the user is not granted access to the study, returns error code 403.
+Gets the corresponding submitted, unprocessed ExperimentalMetadata instance.
 
-#### `POST /publications`
+##### `DELETE /metadata/{id}`
+- Auth: internal auth token with data steward role
+- Returns: 200 or error code
+
+The `id` must be the PID of the corresponding study.
+
+The study must have the status `PENDING`, otherwise returns error code 409.
+
+#### Publication
+
+##### `POST /publications`
 - Auth: internal auth token with data steward role
 - Request Body: Publication (without `id`, `created`)
 - Response Body: {`id`: PID}
@@ -435,14 +482,118 @@ If the corresponding study is not public and the user is not granted access to t
 
 The PID will be automatically created.
 
-#### `GET /publications/{id}`
-- Auth: internal auth token
+The corresponding study must have the status `PENDING`, otherwise returns error code 409.
+
+##### `GET /publications`
+- Auth: internal auth token (optional)
+- Query parameters (all optional):
+  - `year: int` - filter for specific year
+  - `text: str` - text filter (partial match in any plain text field)
+  - `skip: int`, `limit: int`: used for pagination
+- Response Body: list[Publication]
+- Returns: 200 or error code
+
+Only returns publications whose studies are either public or accessible to the user (i.e. the user must be a data steward of access must have been granted to the user).
+
+##### `GET /publications/{id}`
+- Auth: internal auth token (optional)
 - Response Body: Publication
 - Returns: 200 or error code
 
-If the corresponding study is not public and the user is not granted access to the study, returns error code 403.
+if the corresponding study is not public, the auth token is required. In this case, if the user is not a data steward and the user is not granted access to the study, returns error code 403.
 
+##### `PATCH /publications/{id}`
+- Auth: internal auth token with data steward role
+- Request Body: new `dap_id`
+- Returns: 204 or error code
 
+Changing the `dap_id` will be allowed even when the study is already in status `PERSISTED`.
+
+##### `DELETE /publications/{id}`
+- Auth: internal auth token with data steward role
+- Returns: 200 or error code
+
+The corresponding study must have the status `PENDING`, otherwise returns error code 409.
+
+Will also delete the accession number for the publication.
+
+#### DataAccessCommittee
+
+##### `POST /dacs`
+- Auth: internal auth token with data steward role
+- Request Body: DataAccessCommittee (without `created` and `changed`)
+- Returns: 204 or error code
+
+Creates a new DataAccessCommittee instance.
+
+##### `GET /dacs`
+- Auth: None
+- Response Body: list[DataAccessCommittee]
+- Returns: 200 or error code
+
+Gets all DataAccessCommittee instances.
+
+##### `GET /dacs/{id}`
+- Auth: None
+- Response Body: DataAccessCommittee
+- Returns: 200 or error code
+
+Gets the DataAccessCommittee instance with the given `id`.
+
+##### `PATCH /dacs/{id}`
+- Auth: internal auth token with data steward role
+- Request Body: partial DataAccessCommittee(without `id`, `created` and `changed`)
+- Returns: 204 or error code
+
+Updates one or more attributes of an existing DataAccessCommittee instance.
+
+##### `DELETE /dacs/{id}`
+- Auth: internal auth token with data steward role
+- Returns: 200 or error code
+
+If the corresponding DAC is referenced by any DAP, returns error code 409.
+
+Deletes a DataAccessCommittee instance.
+
+#### DataAccessPolicy
+
+##### `POST /daps`
+- Auth: internal auth token with data steward role
+- Request Body: DataAccessPolicy (without `created` and `changed`)
+- Returns: 204 or error code
+
+Creates a new DataAccessCommittee instance.
+
+##### `GET /daps`
+- Auth: None
+- Response Body: list[DataAccessPolicy]
+- Returns: 200 or error code
+
+Gets all DataAccessPolicy instances.
+
+##### `GET /daps/{id}`
+- Auth: None
+- Response Body: DataAccessPolicy
+- Returns: 200 or error code
+
+Gets the DataAccessPolicy instance with the given `id`.
+
+##### `PATCH /daps/{id}`
+- Auth: internal auth token with data steward role
+- Request Body: partial DataAccessPolicy(without `id`, `created` and `changed`)
+- Returns: 204 or error code
+
+Updates one or more attributes of an existing DataAccessPolicy instance.
+
+##### `DELETE /daps/{id}`
+- Auth: internal auth token with data steward role
+- Returns: 200 or error code
+
+If the corresponding DAP is referenced by any study, returns error code 409.
+
+Deletes a DataAccessPolicy instance.
+
+TODO: continue with Dataset, ResourceType, Accession, AltAccession, File maps,....
 
 ### Payload Schemas for Events
 
