@@ -52,11 +52,11 @@ The following features are not included in the first version of the study regist
 
 ## Implementation Details
 
-### Managed Entities
+### Managed Entity Models
 
 #### Study
 
-In the new study-centric metadata concept, the Study serves as the central container for Dataset, Publication, and alternative accessions for each experimental metadata entity. It has a small number of attributes but plays a critical role as a container entity, as its lifecycle is linked to many other entities. It is immutable and receives a permanent accession number upon creation.
+In the new study-centric metadata concept, the Study serves as the central container for Dataset, Publication, and alternative accessions for each experimental metadata entity. It has a small number of attributes but plays a critical role as a container, as its lifecycle is linked to many other entities. It is immutable and receives a permanent accession number upon creation.
 
 Attributes:
 
@@ -69,7 +69,7 @@ Attributes:
 - `users: list[UUID] | None` - user(s) who can access the study (None means publicly accessible)
 - `created: Date` - when the entry was created
 
-Note: Later, the Study should also have an entity referencing the EMIM used in the submission. The experimental metadata itself is kept in a separate entity described below.
+Note: Later, the Study should also have an attribute referencing the EMIM used in the submission. The experimental metadata itself is kept in a separate entity model described below.
 
 #### ExperimentalMetadata
 
@@ -81,7 +81,7 @@ Attributes:
 - `metadata: JsonObject` - the submitted experimental metadata as submitted
 - `submitted: Date` - when the experimental metadata was submitted
 
-This entity has been separated from the Study entity because the metadata can be large (might require GridFS) and is usually accessed separately from the study after transformation.
+This entity model has been separated from the Study entity model because the metadata can be large (might require GridFS) and is usually accessed separately from the study after transformation.
 
 #### Publication
 
@@ -99,7 +99,7 @@ Attributes:
 - `study_id: str` - the PID of the study associated with this publication
 - `created: Date` - when the entry was created
 
-New publications should only be created after verification that the corresponding study exists.
+New Publication entity instances should only be created after verification that the corresponding Study entity instance exists.
 
 #### DataAccessCommittee
 
@@ -137,11 +137,11 @@ Attributes:
 
 The `id` should correspond to the `alias` in the old model, `text` and `url` correspond to `policy_text` and `policy_url`. We do not assign a citable accession number to DAPs anymore.
 
-New DataAccessPolicy entries should only be created after verification that the corresponding DataAccessCommittee exists.
+New DataAccessPolicy entity instances should only be created after verification that the corresponding DataAccessCommittee entity instance exists.
 
 #### Dataset
 
-The Dataset entity describes a set of files and represents the smallest unit for which a data access request can be formulated. All attributes except `dap_id` are immutable, and the entity itself cannot be deleted. However, new Datasets can be created after study creation and assigned to a study without violating its immutability. An immutable accession number is assigned upon creation. Every Dataset belongs to exactly one Study. The DataAccessPolicy assignment is mutable.
+The Dataset entity describes a set of files and represents the smallest unit for which a data access request can be formulated. All attributes except `dap_id` are immutable, and Dataset entity instances cannot be deleted. However, new Dataset entity instances can be created after study creation and assigned to a study without violating its immutability. An immutable accession number is assigned upon creation. Every Dataset belongs to exactly one Study. The DataAccessPolicy assignment is mutable.
 
 Attributes:
 
@@ -153,7 +153,7 @@ Attributes:
 - `dap_id: str` - the code of the DAP for this Dataset
 - `files: list[str]` - the corresponding IDs (aliases) as specified in EM
 
-New DataAccessPolicy entries should only be created after verification that the corresponding study and DataAccessPolicy exists, and that all specified files exist in EM and are specified only once.
+New Dataset entity instances should only be created after verification that the corresponding Study and DataAccessPolicy entity instances exist, and that all specified files exist in EM and are specified only once.
 
 #### ResourceType
 
@@ -181,11 +181,11 @@ The Accession entity stores all existing primary accessions. See also the sectio
 Attributes:
 
 - `id: str` - the primary accession number (PID)
-- `type: Entity` - the entity referenced by this accession
+- `type: Entity` - the entity type referenced by this accession
 - `created: Date` - when the accession was created
 - `superseded_by: str | None` - if deprecated, a new primary accession
 
-Note: When we start introducing versioned accession numbers, we might later split this into two entities, one for holding the base accession numbers, and another one for holding the versioned ones. For faster lookup, we are storing them in separate collections.
+Note: When we start introducing versioned accession numbers, we might later split this into two entity models, one for holding the base accession numbers, and another one for holding the versioned ones. For faster lookup, we are storing them in separate collections.
 
 #### AltAccession
 
@@ -205,9 +205,9 @@ The EmAccessionMap entity stores mappings from submitted IDs to primary accessio
 Attributes:
 
 - `id: str` - the PID of the study to which the experimental metadata belongs
-- `maps: dict[str, dict[str, str]]` - entity specific accession maps
+- `maps: dict[str, dict[str, str]]` - per-resource-type accession maps
 
-The `maps` attribute holds, for every resource in the experimental metadata, a mapping from the identifier used in the original submission (the "alias" field in the current metadata schema) to the primary accession generated by the Study Registry Service and stored in the Accession entity.
+The `maps` attribute holds, for every resource in the experimental metadata, a mapping from the identifier used in the original submission (the "alias" field in the current metadata schema) to the primary accession generated by the Study Registry Service and stored as an Accession in the database.
 
 Example:
 
@@ -234,7 +234,7 @@ Example:
 
 These maps are automatically generated by the service after EM has been submitted.
 
-This entity has been separated from the Study entity because the accession maps can be large (might require GridFS) and the original accessions are rarely needed after transformation.
+This entity model has been separated from the Study entity model because the accession maps can be large (might require GridFS) and the original accessions are rarely needed after transformation.
 
 ### Enums
 
@@ -248,7 +248,7 @@ The AltAccessionType enum holds the different kinds of alternative accessions:
 
 #### DatasetType
 
-The DatasetType enum lists all possible Dataset types. It is populated at service start with the codes of the ResourceType entities belonging to the `DATASET`resource. The service therefore needs to be restarted in order to make new entries available.
+The DatasetType enum lists all possible Dataset types. It is populated at service start with the codes of the ResourceType instances belonging to the `DATASET` resource. The service therefore needs to be restarted in order to make new entries available.
 
 #### DuoModifier
 
@@ -278,7 +278,7 @@ class DuoPermission(StrEnum):
 
 #### StudyType
 
-The StudyType enum lists all possible Study types. It is populated at service start with the codes of the ResourceType entities belonging to the `STUDY`resource. The service therefore needs to be restarted in order to make new entries available.
+The StudyType enum lists all possible Study types. It is populated at service start with the codes of the ResourceType instances belonging to the `STUDY` resource. The service therefore needs to be restarted in order to make new entries available.
 
 #### TypedResource
 
@@ -306,7 +306,7 @@ For now, the accession numbers should be created in the same way as before, assu
 
 A newly submitted study shall always be created with the status `PENDING`. When the status is updated to `PERSISTED`, the service should validate the submission as detailed below. If the validation fails, the status update should be rejected and the submission should keep the status `PENDING`.
 
-After the submission has been successfully validated and moved to the status `PERSISTED`, the service will create new accession numbers for all resources contained in the EM and store these in the database as Accession, AltAccession, and EmAccessionMap entities.
+After the submission has been successfully validated and moved to the status `PERSISTED`, the service will create new accession numbers for all resources contained in the EM and store these in the database as Accession, AltAccession, and EmAccessionMap.
 
 The service will then create an AnnotatedEMPack and publish it as an event, as described further below.
 
@@ -329,12 +329,12 @@ The first implementation of the Study Registry Service shall also contain an ini
 
 Resources archived in GHGA are immutable and should get accession numbers that are globally unique, persistent, and long-term resolvable. To emphasize these qualities, we also call these accession numbers persistent identifiers (PIDs). A PID must always resolve to the exact same state of a resource.
 
-Particularly, the following entities get PIDs:
+Particularly, the following entity types get PIDs:
 
 - studies
 - all research data files
 - datasets (sets of research data files)
-- entities that are part of the experimental metadata
+- entity instances that are part of the experimental metadata
 
 Currently, the accession numbers used by GHGA have a format that starts with the uppercase letters "GHGA", followed by another uppercase letter indicating the resource type (e.g. "S" for study, "D" for Dataset, "U" for publication), followed by a random 14-digit number. The prefixes and number of digits are defined in the [metadata configuration](https://github.com/ghga-de/metadata-config/blob/main/configuration/metadata_config.yaml).
 
@@ -383,7 +383,7 @@ TODO
 
 ### Payload Schemas for Events
 
-The service publishes events that communicate the state of its entities.
+The service publishes events that communicate the state of its entity instances.
 
 In particular, it publishes Annotated Experimental Metadata (AEM). This consists of the original, unmodified experimental metadata published along with additional annotations. These annotations contain all other study-related information and can be consumed by the experimental metadata transformation service and integrated into downstream transformed AEM.
 
