@@ -398,6 +398,52 @@ TODO
 - POST /submissions: Post a submission
 - ...
 
+#### `POST /studies`
+- Auth: internal auth token with data steward role
+- Request Body: Study (without `id`, `created`)
+- Response Body: {`id`: PID}
+- Returns: 201 or error code
+
+The PID will be automatically created.
+
+#### `GET /studies/{id}`
+- Auth: internal auth token
+- Response Body: Study
+- Returns: 200 or error code
+
+If the study is not public and the user is not granted access to the study, returns error code 403.
+
+#### `POST /metadata`
+- Auth: internal auth token with data steward role
+- Request Body: ExperimentalMetadata (without `submitted`)
+- Returns: 204
+
+#### `GET /metadata/{id}`
+- Auth: internal auth token
+- Response Body: ExperimentalMetadata
+- Returns: 200 or error code
+
+The `id` must be the PID of the corresponding study.
+
+If the corresponding study is not public and the user is not granted access to the study, returns error code 403.
+
+#### `POST /publications`
+- Auth: internal auth token with data steward role
+- Request Body: Publication (without `id`, `created`)
+- Response Body: {`id`: PID}
+- Returns: 201 or error code
+
+The PID will be automatically created.
+
+#### `GET /publications/{id}`
+- Auth: internal auth token
+- Response Body: Publication
+- Returns: 200 or error code
+
+If the corresponding study is not public and the user is not granted access to the study, returns error code 403.
+
+
+
 ### Payload Schemas for Events
 
 The service publishes events that communicate the state of its entity instances.
