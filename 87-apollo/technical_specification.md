@@ -327,7 +327,7 @@ After the submission has been successfully validated and moved to the status `PE
 
 The service will then create an AnnotatedEMPack and publish it as an event, as described further below.
 
-TODO: mention file id mapping functionality as well
+As another functionality, the service shall support the mapping of uploaded files to their experimental metadata entries. TODO: elaborate
 
 ### Validation
 
@@ -388,7 +388,7 @@ In addition, the service may expose a public, anonymous read-only API that provi
 Other endpoints:
 - The REST API also needs an endpoint or ResourceType
 - An endpoint to fetch the file names and file accessions for a study (accessible if study is accessible)
-- An endpoint to post file accession to file id mappings
+- An endpoint to post file accession to file id mappings, and get the file names in the EM
 
 TODO
 
