@@ -63,12 +63,11 @@ Attributes:
 - `id: str` - the PID of the study (primary key)
 - `title: str` - comprehensive title for the Study
 - `description: str` - detailed description (abstract) describing the goals of the Study
-- `types: list[str]` - the type(s) of this Study (as list of their Term ids)
+- `types: list[StudyType]` - the type(s) of this Study
 - `affiliations: list[str]` - the affiliation(s) associated with this Study
 - `status: StudyStatus` - the current status of the study (see below)
 - `users: list[UUID] | None` - user(s) who can access the study (None means publicly accessible)
-
-This class should have a validator that checks that the specified types are not empty and exist as Term in the namespace `GHGA_STUDY_TYPE`.
+- `created: Date` - when the entry was created
 
 Note: Later, the Study should also have an entity referencing the EMIM used in the submission. The experimental metadata itself is kept in a separate entity described below.
 
@@ -80,6 +79,7 @@ Attributes:
 
 - `id: str` - the PID of the study to which the experimental metadata belongs
 - `metadata: JsonObject` - the submitted experimental metadata as submitted
+- `submitted: Date` - when the experimental metadata was submitted
 
 This entity has been separated from the Study entity because the metadata can be large (might require GridFS) and is usually accessed separately from the study after transformation.
 
@@ -96,33 +96,48 @@ Attributes:
 - `year: int` - the year of the Publication
 - `journal: str | None` - the name of the journal
 - `doi: str | None` - the DOI identifier of the publication
-- `study_id: str` - the study associated with this publication
+- `study_id: str` - the PID of the study associated with this publication
+- `created: Date` - when the entry was created
 
-This class should have a validator that checks that the study linked to in `study_id` exists.
+New publications should only be created after verification that the corresponding study exists.
 
 #### DataAccessCommittee
 
 The DataAccessCommittee entity describes a Data Access Committee (DAC). It is managed independently of any study and is mutable.
 
-Attributes: all attributes of Term (see below), plus:
+Attributes:
 
-- `email: str` - the contact email address of the DAC
+- `id: str` - the code of the DAC (short, uppercase) (primary key)
+- `name: str` - human readable name of the DAC
+- `email: EmailStr` - the contact email address of the DAC
 - `institute: str` - the institute the DAC belongs to
+- `created: Date` - when the DAC entry was created
+- `changed: Date` - when the DAC entry was last changed
+- `active: bool` - whether the DAC is still active
 
-A human-readable identifier would be useful for management and assignment purposes, but no citable accession number is required.
+Note: The `name` should correspond to the `alias` in the old model. The `id` should be derived from the name (shortened, converted to upper case). We do not assign a citable accession number to DACs anymore.
 
 #### DataAccessPolicy
 
 The DataAccessPolicy entity describes a policy for data access (DAP). It is managed independently of a study, is mutable, and belongs to exactly one DataAccessCommittee.
 
-Attributes: all attributes of Term (see below), plus:
+Attributes:
 
-- `text: str` - the complete text for the Data Access Policy
-- `duo_permission: str` - the DUO id of the corresponding Data Use Permission
-- `duo_modifiers: list[str]` - the DUO id(s) of the corresponding Data Use Modifiers
-- `dac_id: str` - the DAC linked to this DAP
+- `id: str` - the code of the DAP (short, uppercase) (primary key)
+- `name: str` - human readable name of the DAP
+- `description: str` - a longer description of the DAP
+- `text: str` - the complete text for the DAP
+- `url: Url | None` - if available, the URL for the DAP
+- `duo_permission_id: DuoPermission` - the DUO id of the corresponding Data Use Permission
+- `duo_modifier_ids: list[DuoModifier]` - the DUO id(s) of the corresponding Data Use Modifiers
+- `dac_id: str` - the code of the DAC linked to this DAP
+- `created: Date` - when the DAP entry was created
+- `changed: Date` - when the DAP entry was last changed
+- `active: bool` - whether the DAP is still active
 
-This class should have a validator that checks that the specified permissions and modifiers exist as Term in the namespace `GA4GH_DUO` and that the DAC linked to in `dac_id` also exists.
+The `id` should correspond to the `alias` in the old model, `text` and `url` correspond to `policy_text` and `policy_url`. We do not assign a citable accession number to DAPs anymore.
+
+New DataAccessPolicy entries should only be created after verification that the corresponding DataAccessCommittee exists.
 
 #### Dataset
 
@@ -133,31 +148,31 @@ Attributes:
 - `id: str` - the PID of the Dataset (primary key)
 - `title: str` - comprehensive title for the Dataset
 - `description: str` - detailed description summarizing this Dataset
-- `types: list[str]` - the type(s) of this Dataset (as list of Term ids)
+- `types: list[DatasetType]` - the type(s) of this Dataset
 - `study_id: str` - the PID of the study associated with this Dataset
-- `dap_id: str` - the PID of the data access policy for this Dataset
+- `dap_id: str` - the code of the DAP for this Dataset
 - `files: list[str]` - the corresponding IDs (aliases) as specified in EM
 
-This class should have a validator that checks that the specified types are not empty, that they exist as Term in the namespace `GHGA_DATASET_TYPE`, that the study and data access policy linked to in `study_id` and `dap_id` exists, and that all specified files exist in EM and are specified only once.
+New DataAccessPolicy entries should only be created after verification that the corresponding study and DataAccessPolicy exists, and that all specified files exist in EM and are specified only once.
 
-#### Term
+#### ResourceType
 
-The Term entity holds lookup information for terms coming from controlled vocabularies and ontologies used in the administrative metadata. This also includes controlled vocabularies that are only used by GHGA in the administrative metadata, like study or dataset types. This could later be expanded into a full-fledged service that allows looking up any term used in the metadata, including the EM. Such a service will be particularly useful for the frontend.
+The ResourceType entity holds the possible types for studies and datasets (could be also used for other resources).
 
 Attributes:
 
-- `id: str` - a globally unique, canonical identifier (primary identifier)
-- `label: str` - human-readable name for the term
+- `id: UUID` - internal ID (primary key)
+- `code: str` - the code of the resource type (short, uppercase)
+- `resource: TypedResource` - the kind of resource this type belongs to
+- `name: str` - the human readable name of the resource type
 - `description: str | None` - optional definition text or help text
-- `space: Namespace` - the namespace for the term
-- `url: Url | None` - optional URL for the term
-- `deprecated: bool` - true if this term shouldn't be used in new studies anymore
+- `created: Date` - when the resource type was created
+- `changed: Date` - when the resource type was last changed
+- `active: bool` - whether the resource type is still active
 
-The terms are grouped into different namespaces corresponding to one of the Namespace enum values defined in this document.
+The corresponding collection should be created with a composite index on `code` and `resource`.
 
-For the internally managed controlled vocabularies, the id must be a UUID in string format. For standardized controlled vocabularies and ontologies, the id must start with the officially registered upper namespace prefix (like "DUO") followed by a colon.
-
-The class should have a validator that guarantees that the format of the `id` field corresponds to the specified `space`.
+The corresponding collection can be populated with the study types as defined in the existing GHGA metadata schema. The existing dataset types need to be extracted from the current submission store, as they are not defined in the existing schema.
 
 #### Accession
 
@@ -165,10 +180,10 @@ The Accession entity stores all existing primary accessions. See also the sectio
 
 Attributes:
 
- - `id: str` - the primary accession number (PID)
- - `type: Entity` - the entity referenced by this accession
- - `created: Date` - when the accession was created
- - `superseded_by: str | None` - if deprecated, a new primary accession
+- `id: str` - the primary accession number (PID)
+- `type: Entity` - the entity referenced by this accession
+- `created: Date` - when the accession was created
+- `superseded_by: str | None` - if deprecated, a new primary accession
 
 Note: When we start introducing versioned accession numbers, we might later split this into two entities, one for holding the base accession numbers, and another one for holding the versioned ones. For faster lookup, we are storing them in separate collections.
 
@@ -190,11 +205,34 @@ The EmAccessionMap entity stores mappings from submitted IDs to primary accessio
 Attributes:
 
 - `id: str` - the PID of the study to which the experimental metadata belongs
-- `maps: dict[EmEntity, dict[str, str]]` - entity specific accession maps
+- `maps: dict[str, dict[str, str]]` - entity specific accession maps
 
-The `maps` attribute holds, for every entity in the experimental metadata, a mapping from the identifier used in the original submission to the primary accession generated by the Study Registry Service and stored in the Accession entity.
+The `maps` attribute holds, for every resource in the experimental metadata, a mapping from the identifier used in the original submission (the "alias" field in the current metadata schema) to the primary accession generated by the Study Registry Service and stored in the Accession entity.
 
-Note: The original ID in the EM has been historically stored in the "alias" attribute of the metadata model. We may want to change that and rename it to "id" in the new study-centric model since it's actually used as an identifier that should be unique for a specific submission and experimental metadata entity.
+Example:
+
+```json
+{
+  "experiments: {
+    "EXP_1": "GHGAX12345678901234",
+    "EXP_2": "GHGAX12345678901235"
+    ...
+  },
+  "experiment_methods": {
+    "EXP_METHOD_1": "GHGAQ12345678901234",
+    "EXP_METHOD_2": "GHGAQ12345678901235"
+    ...
+  },
+  "samples": {
+    "SAMPLE_1": "GHGAN12345678901234",
+    "SAMPLE_2": "GHGAN12345678901235",
+    ...
+  },
+  ...
+}
+```
+
+These maps are automatically generated by the service after EM has been submitted.
 
 This entity has been separated from the Study entity because the accession maps can be large (might require GridFS) and the original accessions are rarely needed after transformation.
 
@@ -208,15 +246,46 @@ The AltAccessionType enum holds the different kinds of alternative accessions:
 - `FILE_ID` - internal file id
 - `GHGA_LEGACY` - legacy GHGA accession (after switching to new PID schema)
 
-#### Namespace
+#### DatasetType
 
-The Namespace enum lists all supported namespaces for terms:
+The DatasetType enum lists all possible Dataset types. It is populated at service start with the codes of the ResourceType entities belonging to the `DATASET`resource. The service therefore needs to be restarted in order to make new entries available.
 
-- `GHGA_STUDY_TYPE`: a study type supported by GHGA (e.g. `RARE_DISEASE`)
-- `GHGA_DATASET_TYPE`: a dataset type supported by GHGA (e.g. `WHOLE_GENOME_SEQUENCING`)
-- `GHGA_DAC`: a DataAccessCommittee as described above
-- `GHGA_DAP`: a DataAccessPolicy as described above
-- `GA4GH_DUO`: the GA4GH Data Use Ontology
+#### DuoModifier
+
+The DuoModifier enum lists all existing [DUO](https://www.ga4gh.org/product/data-use-ontology-duo/) modifiers. These are descendants of 'DUO:0000017: data use modifier' (e.g. 'DUO:0000043').
+
+ The existing DUO ids, their shorthands, labels and descriptions are available a [CSV file](https://github.com/EBISPOT/DUO/blob/master/duo.csv), it contains currently 20 modifiers. The name of the enum should be the shorthand, the value should be the identifier:
+
+```python
+class Modifier(StrEnum):
+    RS = "DUO:0000012"
+    HMB = "DUO:0000006"
+    ...
+```
+
+#### DuoPermission
+
+The DuoPermission enum lists all existing [DUO](https://www.ga4gh.org/product/data-use-ontology-duo/) permissions. These are descendants of 'DUO:0000001: data use permission' (e.g. 'DUO:0000004').
+
+ The existing DUO ids, their shorthands, labels and descriptions are available a [CSV file](https://github.com/EBISPOT/DUO/blob/master/duo.csv), it contains currently 5 permissions. The name of the enum should be the shorthand, the value should be the identifier:
+
+```python
+class DuoPermission(StrEnum):
+    NPOA = "DUO:0000004"
+    NMDS = "DUO:0000015"
+    ...
+```
+
+#### StudyType
+
+The StudyType enum lists all possible Study types. It is populated at service start with the codes of the ResourceType entities belonging to the `STUDY`resource. The service therefore needs to be restarted in order to make new entries available.
+
+#### TypedResource
+
+The TypedResource enum lists all resources whose types are managed by this service:
+
+- `DATASET`: Dataset
+- `STUDY`: Study
 
 #### StudyStatus
 
@@ -229,35 +298,9 @@ The StudyStatus enum describes all possible states of a Study:
 
 In the initial implementation we will only use the status values `PENDING` and `PERSISTED`.
 
-#### Entity
-
-The Entity enum lists all supported entities archived by GHGA. It should be the union of all entities used in administrative metadata (AmEntity) and all data types used in experimental metadata (EmEntity).
-
-Values of AmEntity:
-
-- `DataAccessCommittee`
-- `DataAccessPolicy`
-- `Dataset`
-- `Publication`
-- `Study`
-
-Values of EmEntity:
-
-- `Analysis`
-- `AnalysisMethod`
-- `AnalysisMethodSupportingFile`
-- `Experiment`
-- `ExperimentMethod`
-- `ExperimentMethodSupportingFile`
-- `Individual`
-- `IndividualSupportingFile`
-- `ProcessDataFile`
-- `ResearchDataFile`
-- `Sample`
-
 ### Core functionality
 
-The Study Registry Service can be accessed by a REST API in order to submit and query DAM, PAM, EM and lookup values (the Term entity). It also allows updating DAM and lookup values. The REST API is described further below.
+The Study Registry Service can be accessed by a REST API in order to submit and query DAM, PAM, EM and lookup values (ResourceType entries). It also allows updating DAM and lookup values. The REST API is described further below.
 
 For now, the accession numbers should be created in the same way as before, assuming that the existing accessions have been imported into the database already, so that no duplicate accessions will be created.
 
@@ -275,7 +318,7 @@ On ingress, submissions must be validated and rejected if there are any validati
 
 - ingested DAM and PAM (e.g., study or dataset) are validated as DTOs using Pydantic
 - the submission must be complete (particularly, it must have a Publication and ExperimentalMetadata)
-- all terms referenced in the ingested DAM and PAM must exist and not be deprecated
+- all referenced resources in the ingested DAM and PAM must exist and not be deprecated
 - ingested EM is validated by a separate EM validation service
 
 In this epic, we assume that the EM validation service exists and provides a simple REST API for validating EM against a given EMIM (currently we only have one).
@@ -326,7 +369,7 @@ The service provides an API that is accessible via the Data Portal exclusively b
 In addition, the service may expose a public, anonymous read-only API that provides information about DataAccessCommittees and DataAccessPolicies.
 
 Other endpoints:
-- The REST API also needs an endpoint to look up terms
+- The REST API also needs an endpoint or ResourceType
 - An endpoint to fetch the file names and file accessions for a study (accessible if study is accessible)
 - An endpoint to post file accession to file id mappings
 
