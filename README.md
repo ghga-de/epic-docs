@@ -103,3 +103,4 @@ This repository is part of the [Epic Planning and Marathon SOP](https://ghga.pag
 - (84) [Sarcastic Fringehead](./84-sarcastic-fringehead/technical_specification.md): File Upload Path Part 2
 - (85) [Tasselled Wobbegong](./85-tasselled-wobbegong/technical_specification.md): Support for Key-Value-Store in Hexkit
 - (86) [Archaeopteryx](./86-archaeopteryx/technical_specification.md): Basic Research Data Upload Box Frontend
+- (87) [Apollo](./87-apollo/technical_specification.md): Initial Version of a Study Registry Service
