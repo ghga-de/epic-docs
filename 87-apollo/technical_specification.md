@@ -367,7 +367,11 @@ The accession store shall also contain a mapping from file accessions to interna
 
 ### Authorization
 
-TODO
+With the introduction of study-centric metadata processing, we also introduce authorization for metadata. Instead of assuming all metadata is public, we now require access grants for metadata, similarly to the access grants for downloading datasets and uploading files to research data upload boxes.
+
+In the first implementation, the authorization will not yet be managed by actual grants via the claims repository, but handled via the `users` field of the Study instances. The field should store the IDs of all users who are allowed to access the study and its corresponding metadata. This field can also be set to `None`, indicating that the metadata is publicly accessible.
+
+If study submissions contain non-public metadata, this metadata must be provided as files contained in a dataset that needs to be requested like other datasets.
 
 ## User Journeys (optional)
 
