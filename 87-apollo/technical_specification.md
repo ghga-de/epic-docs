@@ -37,10 +37,10 @@ Another change that needs to be considered in the implementation of the SRS is t
 
 The following features are not included in the first version of the study registry:
 
+- Migration of the existing submission store to the Study Registry Service.
 - Change requests to existing studies. In the future, it should be possible to create a modified copy of an existing study.
 - New PID schema.
 - Support for multiple or versioned EMIMs, integration of an EMIM registry.
-- Migration of the existing submission store to the Study Registry Service.
 - Frontend to ingest submissions and manage dynamic administrative metadata and lookups.
 - Populating and updating lookup tables from existing dictionaries and ontologies.
 - Implementation of the EM validation service.
@@ -66,6 +66,8 @@ Attributes:
 - `created: Date` - when the entry was created
 - `created_by: UUID` - the id of the user who uploaded the study
 - `approved_by: UUID | None` - the id of the user who approved the study
+
+The `status` and `users` fields can be updated by the data steward. Currently, the status can only be changed from `PENDING` to `PERSISTED`. Additional status changes may be supported later. The `users` field is used for authorization (see the corresponding section) and may be removed later when authorization is handled via the claims repository. The `approved_by` field is automatically set to the user ID of the data steward when the study is persisted.
 
 Note: Later, the Study should also have an attribute referencing the EMIM used in the submission. The experimental metadata itself is kept in a separate entity model described below.
 
@@ -139,7 +141,7 @@ New DataAccessPolicy entity instances should only be created after verification 
 
 #### Dataset
 
-The Dataset entity describes a set of files and represents the smallest unit for which a data access request can be formulated. All attributes except `dap_id` are immutable, and Dataset entity instances cannot be deleted. However, new Dataset entity instances can be created after study creation and assigned to a study without violating its immutability. An immutable accession number is assigned upon creation. Every Dataset belongs to exactly one Study. The DataAccessPolicy assignment is mutable.
+The Dataset entity describes a set of files and represents the smallest unit for which a data access request can be formulated. All attributes except `dap_id` are immutable, and Dataset entity instances cannot be deleted unless the study still has the status `PENDING`. However, new Dataset entity instances can be created after study creation and assigned to a study without violating its immutability. An immutable accession number is assigned upon creation. Every Dataset belongs to exactly one Study. The DataAccessPolicy assignment is mutable.
 
 Attributes:
 
@@ -313,7 +315,7 @@ The StudyStatus enum describes all possible states of a Study:
 - `APPROVED`
 - `PERSISTED`
 
-In the initial implementation we will only use the status values `PENDING` and `PERSISTED`.
+In the initial implementation we will only use the status values `PENDING` and `PERSISTED`, the other status values shall be rejected by the API for now.
 
 ### Core functionality
 
@@ -327,7 +329,7 @@ When the status is updated with the `PATCH /studies` endpoint, or when the `/rpc
 
 When the `/rpc/publish` endpoint is called and the submission has been successfully validated, the service will create new accession numbers for all resources contained in the EM and store them in the database as Accession, AltAccession, and EmAccessionMap. If the study had already been published before, accessions for resources that have been removed in the submission shall be deleted.
 
-The service will then create an AnnotatedEMPack and publish it as an event, as described further below.
+The service will then create an AnnotatedEMPack and publish it as an event if the exact same AnnotatedEMPack has not been published before, as described further below.
 
 As another functionality, the service shall support the mapping of uploaded files to their experimental metadata entries. See the `POST /filenames` endpoint below.
 
@@ -340,7 +342,7 @@ On ingress, submissions must be validated and rejected if there are any validati
 - all referenced resources in the ingested DAM and PAM must exist and not be deprecated
 - ingested EM is validated by a separate EM validation service
 
-In this epic, we assume that the EM validation service exists and provides a simple REST API for validating EM against a given EMIM (currently we only have one).
+In this epic, we assume that the EM validation service exists and provides a simple REST API for validating EM against a given EMIM (currently we only have one). The exact API for the EM validation service will be defined in a future epic.
 
 ### Accession registry
 
@@ -380,13 +382,13 @@ If study submissions contain non-public metadata, this metadata must be provided
 Typical user journey for a data steward creating a new study:
 
 - data steward logs into the data portal
-- submits new study type via `POST /resource-types` if needed
+- submits a new study type via `POST /resource-types` if needed
 - submits the study via `POST /studies`
 - submits the experimental metadata via `POST /metadata`
 - submits the publication via `POST /publications`
 - submits a new data access committee via `POST /dacs` if needed
 - submits a new data access policy via `POST /daps` if needed
-- submits new dataset type via `POST /resource-types` if needed
+- submits a new dataset type via `POST /resource-types` if needed
 - submits one or more datasets via `POST /datasets`
 - publishes the study via `POST /rpc/publish`
 - verifies that the preview looks good
@@ -454,7 +456,7 @@ The user related fields should only be returned if the request is made by a data
 
 The `status` can only be moved from `PENDING` to `PERSISTED`, otherwise returns error code 409. The `users` field can only be set to `None` when the status is `PERSISTED`.
 
-When the status is changed, also validates the study similar to the `/rpc/publish` endpoint, and returns error code 409 if the validation fails, without changing the status.
+When the status is changed, also validates the study similarly to the `/rpc/publish` endpoint, and returns error code 409 if the validation fails, without changing the status.
 
 ##### `DELETE /studies/{id}`
 
@@ -622,7 +624,7 @@ Updates one or more attributes of an existing DataAccessPolicy instance.
 - Auth: internal auth token with data steward role
 - Returns: 200 or error code
 
-If the corresponding DAP is referenced by any study, returns error code 409.
+If the corresponding DAP is referenced by any dataset, returns error code 409.
 
 Deletes a DataAccessPolicy instance.
 
@@ -700,19 +702,23 @@ Will create a new ResourceType instance.
 - Response Body: `list[ResourceType]`
 - Returns: 200 or error code
 
+Gets all ResourceType instances.
+
 ##### `GET /resource-types/{id}`
 
 - Auth: None
 - Response Body: `ResourceType`
 - Returns: 200 or error code
 
-If the corresponding study is not public, the auth token is required. In this case, if the user is not a data steward and the user is not granted access to the study, returns error code 403.
+Gets the ResourceType instance with the given internal ID.
 
 ##### `PATCH /resource-types/{id}`
 
 - Auth: internal auth token with data steward role
-- Request Body: partial `ResourceType` (without `id`, `created`, and `changed`)
+- Request Body: new `name`, `description`, `active`
 - Returns: 204 or error code
+
+Modifies the ResourceType instance with the given internal ID.
 
 ##### `DELETE /resource-types/{id}`
 
@@ -763,15 +769,15 @@ This endpoint may only be called from UOS.
 
 Should check whether the specified file accessions exist and all belong to the study with the specified study PID.
 
-Should then create an `AltAccession` instance with type `FILE_ID` for all entries in the passed map, where `pid` should be the key and `id` should be the value in the map.
+Should then upsert an `AltAccession` instance with type `FILE_ID` for all entries in the passed map, where `pid` should be the key and `id` should be the value in the map.
 
 Should then also republish the passed map for consumption by DINS and WPS.
 
 ### RPC Style/Synchronous
 
-#### Publication
+#### Study Publication
 
-##### `POST /rpc/publish/{id}` 
+##### `POST /rpc/publish/{id}`
 
 - Auth: internal auth token with data steward role
 - Returns: 204 or error code
@@ -792,6 +798,8 @@ The published AEM events shall have the following schema:
 - `accessions: JSONObject` - the corresponding maps from EmAccessionMap
 - `study: Study` - the corresponding study with nested publication
 - `datasets: list[Dataset]` - the associated datasets with nested DAP and DAC
+
+The payload should use slightly modified classes using embeddings instead of references.
 
 The service also republishes filename mappings received from the UOS via the REST API. The payload should be the exact same mapping; the study PID is not needed.
 
