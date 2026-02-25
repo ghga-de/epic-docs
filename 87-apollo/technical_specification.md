@@ -15,7 +15,7 @@ Its function is currently implemented by the [GHGA Data Steward Kit](https://git
 
 More precisely, the service replaces the Submission Registry and the Accession Registry managed via metldata and stored on the file system of a virtual machine operated by a GHGA central data steward. The submissions are now stored in a database owned by the SRS.
 
-The second crucial change introduced with the SRS is the separation of Experimental Metadata from Persistent Administrative Metadata, Dynamic Administrative Metadata, and Datasets, which were previously bundled in an all-in-one [GHGA metadata schema](https://github.com/ghga-de/ghga-metadata-schema), and the move from the former dataset-centric metadata concept to a study-centric one.
+The second crucial change introduced with the SRS is the separation of Experimental Metadata from Persistent Administrative Metadata, Dynamic Administrative Metadata, and Datasets, which were previously bundled into an all-in-one [GHGA metadata schema](https://github.com/ghga-de/ghga-metadata-schema), and the move from the former dataset-centric metadata concept to a study-centric one.
 
 The Experimental Metadata should be managed in a generic way, without semantic interpretation of its content besides generating an accession number for each entity.
 
@@ -57,10 +57,10 @@ In the new study-centric metadata concept, the Study serves as the central conta
 Attributes:
 
 - `id: str` - the PID of the study (primary key)
-- `title: str` - comprehensive title for the Study
-- `description: str` - detailed description (abstract) describing the goals of the Study
-- `types: list[StudyType]` - the type(s) of this Study
-- `affiliations: list[str]` - the affiliation(s) associated with this Study
+- `title: str` - comprehensive title for the study
+- `description: str` - detailed description (abstract) describing the goals of the study
+- `types: list[StudyType]` - the type(s) of this study
+- `affiliations: list[str]` - the affiliation(s) associated with this study
 - `status: StudyStatus` - the current status of the study (see below)
 - `users: list[UUID] | None` - user(s) who can access the study (None means publicly accessible)
 - `created: Date` - when the entry was created
@@ -76,7 +76,7 @@ The ExperimentalMetadata entity stores the actual experimental metadata belongin
 Attributes:
 
 - `id: str` - the PID of the study to which the experimental metadata belongs
-- `metadata: JsonObject` - the submitted experimental metadata as submitted
+- `metadata: JsonObject` - the experimental metadata exactly as submitted
 - `submitted: Date` - when the experimental metadata was submitted
 
 This entity model has been separated from the Study entity model because the metadata can be large (might require GridFS) and is usually accessed separately from the study after transformation.
@@ -88,10 +88,10 @@ The Publication is the citation reference for the study. It is immutable and rec
 Attributes:
 
 - `id: str` - the PID of the Publication (primary key)
-- `title: str` - the title for the Publication
-- `abstract: str | None` - the abstract of the Publication
-- `authors: list[str]` - the author(s) of the Publication
-- `year: int` - the year of the Publication
+- `title: str` - the title of the publication
+- `abstract: str | None` - the abstract of the publication
+- `authors: list[str]` - the author(s) of the publication
+- `year: int` - the year of the publication
 - `journal: str | None` - the name of the journal
 - `doi: str | None` - the DOI identifier of the publication
 - `study_id: str` - the PID of the study associated with this publication
@@ -144,14 +144,14 @@ The Dataset entity describes a set of files and represents the smallest unit for
 Attributes:
 
 - `id: str` - the PID of the Dataset (primary key)
-- `title: str` - comprehensive title for the Dataset
-- `description: str` - detailed description summarizing this Dataset
-- `types: list[DatasetType]` - the type(s) of this Dataset
+- `title: str` - comprehensive title for the dataset
+- `description: str` - detailed description summarizing this dataset
+- `types: list[DatasetType]` - the type(s) of this dataset
 - `study_id: str` - the PID of the study associated with this Dataset
 - `dap_id: str` - the code of the DAP for this Dataset
 - `files: list[str]` - the corresponding IDs (aliases) as specified in EM
-- `created: Date` - when the Dataset was created
-- `changed: Date` - when the DAP for the Dataset was last changed
+- `created: Date` - when the dataset was created
+- `changed: Date` - when the DAP for the dataset was last changed
 
 New Dataset entity instances should only be created after verification that the corresponding Study and DataAccessPolicy entity instances exist, and that all specified files exist in EM and are specified only once.
 
@@ -213,7 +213,7 @@ Example:
 
 ```json
 {
-  "experiments: {
+  "experiments": {
     "EXP_1": "GHGAX12345678901234",
     "EXP_2": "GHGAX12345678901235"
     ...
@@ -271,7 +271,7 @@ The DatasetType enum lists all possible Dataset types. It is populated at servic
 
 The DuoModifier enum lists all existing [DUO](https://www.ga4gh.org/product/data-use-ontology-duo/) modifiers. These are descendants of 'DUO:0000017: data use modifier' (e.g. 'DUO:0000043').
 
- The existing DUO ids, their shorthands, labels and descriptions are available a [CSV file](https://github.com/EBISPOT/DUO/blob/master/duo.csv), it contains currently 20 modifiers. The name of the enum should be the shorthand, the value should be the identifier:
+The existing DUO IDs, their shorthands, labels, and descriptions are available in a [CSV file](https://github.com/EBISPOT/DUO/blob/master/duo.csv). It currently contains 20 modifiers. The enum member name should be the shorthand, and the value should be the identifier:
 
 ```python
 class Modifier(StrEnum):
@@ -284,7 +284,7 @@ class Modifier(StrEnum):
 
 The DuoPermission enum lists all existing [DUO](https://www.ga4gh.org/product/data-use-ontology-duo/) permissions. These are descendants of 'DUO:0000001: data use permission' (e.g. 'DUO:0000004').
 
- The existing DUO ids, their shorthands, labels and descriptions are available a [CSV file](https://github.com/EBISPOT/DUO/blob/master/duo.csv), it contains currently 5 permissions. The name of the enum should be the shorthand, the value should be the identifier:
+The existing DUO IDs, their shorthands, labels, and descriptions are available in a [CSV file](https://github.com/EBISPOT/DUO/blob/master/duo.csv). It currently contains 5 permissions. The enum member name should be the shorthand, and the value should be the identifier:
 
 ```python
 class DuoPermission(StrEnum):
@@ -323,13 +323,13 @@ For now, the accession numbers should be created in the same way as before, assu
 
 A newly submitted study shall always be created with the status `PENDING`.
 
-When the status is updated with the `PATCH /studies` endpoint or the `/rpc/publish` endpoint is called, the service should validate the submission as detailed below. If the validation fails, the status update shall be rejected and the status of the submission shall no be changed.
+When the status is updated with the `PATCH /studies` endpoint, or when the `/rpc/publish` endpoint is called, the service should validate the submission as detailed below. If validation fails, the status update shall be rejected and the submission status shall not be changed.
 
-When the `/rpc/publish` endpoint is called and the submission has been successfully validated, the service will create new accession numbers for all resources contained in the EM and store these in the database as Accession, AltAccession, and EmAccessionMap. If the study had been already published before, accessions for resources that have been removed in the submission shall be deleted.
+When the `/rpc/publish` endpoint is called and the submission has been successfully validated, the service will create new accession numbers for all resources contained in the EM and store them in the database as Accession, AltAccession, and EmAccessionMap. If the study had already been published before, accessions for resources that have been removed in the submission shall be deleted.
 
 The service will then create an AnnotatedEMPack and publish it as an event, as described further below.
 
-As another functionality, the service shall support the mapping of uploaded files to their experimental metadata entries. See the `POST /file_names` endpoint below.
+As another functionality, the service shall support the mapping of uploaded files to their experimental metadata entries. See the `POST /filenames` endpoint below.
 
 ### Validation
 
@@ -373,15 +373,32 @@ In the first implementation, the authorization will not yet be managed by actual
 
 If study submissions contain non-public metadata, this metadata must be provided as files contained in a dataset that needs to be requested like other datasets.
 
-## User Journeys (optional)
+## User Journeys
 
-This epic covers the following user journeys:
+### New Study
 
-\<Images and descriptions of user journeys go here. Images are deposited in the `./images` sub-directory.\>
+Typical user journey for a data steward creating a new study:
 
-![\<Example Image\>](./images/data_upload.jpg)
-
-TODO (see AC: Metadata Services)
+- data steward logs into the data portal
+- submits new study type via `POST /resource-types` if needed
+- submits the study via `POST /studies`
+- submits the experimental metadata via `POST /metadata`
+- submits the publication via `POST /publications`
+- submits a new data access committee via `POST /dacs` if needed
+- submits a new data access policy via `POST /daps` if needed
+- submits new dataset type via `POST /resource-types` if needed
+- submits one or more datasets via `POST /datasets`
+- publishes the study via `POST /rpc/publish`
+- verifies that the preview looks good
+- uploads the corresponding files
+  (Sarcastic Fringehead and Archaeopteryx epics):
+  - creates a Research Data Upload Box for the study
+  - uploads all corresponding files using the connector
+  - fetches filenames with the `GET /filenames` endpoint
+  - maps the EM filenames to the uploaded filenames
+  - UOS sends the mapping to the `POST /filenames` endpoint
+- data steward sets status to `PERSISTED` via `PATCH /studies`
+- publishes the study via `POST /rpc/publish`
 
 ## API Definitions
 
@@ -389,7 +406,7 @@ TODO (see AC: Metadata Services)
 
 The service provides an API that is accessible via the Data Portal. Through this API, data stewards can modify resources within the immutability constraints outlined in this document. Some read-only endpoints are also exposed publicly in the first implementation. This might be tightened up later when the corresponding information will be available elsewhere like via the API of the upcoming resource registry service, or we could make this configurable.
 
-In order to support the migration of the existing dataset-centric metadata that already has been imported into GHGA, we will need to extend the API with additional parameters or end-points that allow taking over existing accession numbers or do bulk imports without the data portal. Similar APIs might be added later to ingest metadata directly from other sources.
+In order to support the migration of the existing dataset-centric metadata that has already been imported into GHGA, we will need to extend the API with additional parameters or endpoints that allow taking over existing accession numbers or performing bulk imports without the data portal. Similar APIs might be added later to ingest metadata directly from other sources.
 
 #### Study API
 
@@ -415,7 +432,7 @@ After this request, the new Study will have the status `PENDING` and the `users`
 - Response Body: `list[Study]`
 - Returns: 200 or error code
 
-Only returns studies that are either public or accessible to the user (i.e. the user must be a data steward of access must have been granted to the user).
+Only returns studies that are either public or accessible to the user (i.e. the user must be a data steward, or access must have been granted to the user).
 
 The user related fields should only be returned if the request is made by a data steward.
 
@@ -446,7 +463,7 @@ When the status is changed, also validates the study similar to the `/rpc/publis
 
 The study must have the status `PENDING`, otherwise returns error code 409.
 
-Will also delete the corresponding experimental metadata, publications and dataset, and all corresponding accessions.
+Will also delete the corresponding experimental metadata, publications, and datasets, as well as all corresponding accessions.
 
 #### ExperimentalMetadata API
 
@@ -504,7 +521,7 @@ The corresponding study must have the status `PENDING`, otherwise returns error 
 - Response Body: `list[Publication]`
 - Returns: 200 or error code
 
-Only returns publications whose studies are either public or accessible to the user (i.e. the user must be a data steward of access must have been granted to the user).
+Only returns publications whose studies are either public or accessible to the user (i.e. the user must be a data steward, or access must have been granted to the user).
 
 ##### `GET /publications/{id}`
 
@@ -552,7 +569,7 @@ Gets the DataAccessCommittee instance with the given `id`.
 ##### `PATCH /dacs/{id}`
 
 - Auth: internal auth token with data steward role
-- Request Body: partial `DataAccessCommittee`(without `id`, `created` and `changed`)
+- Request Body: partial `DataAccessCommittee` (without `id`, `created`, and `changed`)
 - Returns: 204 or error code
 
 Updates one or more attributes of an existing DataAccessCommittee instance.
@@ -574,12 +591,12 @@ Deletes a DataAccessCommittee instance.
 - Request Body: `DataAccessPolicy` (without `created` and `changed`)
 - Returns: 204 or error code
 
-Creates a new DataAccessCommittee instance.
+Creates a new DataAccessPolicy instance.
 
 ##### `GET /daps`
 
 - Auth: None
-- Response Body: list[DataAccessPolicy]
+- Response Body: `list[DataAccessPolicy]`
 - Returns: 200 or error code
 
 Gets all DataAccessPolicy instances.
@@ -595,7 +612,7 @@ Gets the DataAccessPolicy instance with the given `id`.
 ##### `PATCH /daps/{id}`
 
 - Auth: internal auth token with data steward role
-- Request Body: partial `DataAccessPolicy`(without `id`, `created` and `changed`)
+- Request Body: partial `DataAccessPolicy` (without `id`, `created`, and `changed`)
 - Returns: 204 or error code
 
 Updates one or more attributes of an existing DataAccessPolicy instance.
@@ -614,7 +631,7 @@ Deletes a DataAccessPolicy instance.
 ##### `POST /datasets`
 
 - Auth: internal auth token with data steward role
-- Request Body: `Publication` (without `id`, `created`, `changed`)
+- Request Body: `Dataset` (without `id`, `created`, `changed`)
 - Response Body: `Dataset`
 - Returns: 201 or error code
 
@@ -635,7 +652,7 @@ The corresponding study must have the status `PENDING`, otherwise returns error 
 - Response Body: `list[Dataset]`
 - Returns: 200 or error code
 
-Only returns publications whose studies are either public or accessible to the user (i.e. the user must be a data steward of access must have been granted to the user).
+Only returns datasets whose studies are either public or accessible to the user (i.e. the user must be a data steward, or access must have been granted to the user).
 
 ##### `GET /datasets/{id}`
 
@@ -664,7 +681,7 @@ Will also delete the accession number for the dataset.
 
 #### ResourceType API
 
-##### `POST /resource_types`
+##### `POST /resource-types`
 
 - Auth: internal auth token with data steward role
 - Request Body: `ResourceType` (without `id`, `created`, `changed`)
@@ -673,7 +690,7 @@ Will also delete the accession number for the dataset.
 
 Will create a new ResourceType instance.
 
-##### `GET /resource_types`
+##### `GET /resource-types`
 
 - Auth: None
 - Query parameters (all optional):
@@ -683,7 +700,7 @@ Will create a new ResourceType instance.
 - Response Body: `list[ResourceType]`
 - Returns: 200 or error code
 
-##### `GET /resource_types/{id}`
+##### `GET /resource-types/{id}`
 
 - Auth: None
 - Response Body: `ResourceType`
@@ -691,13 +708,13 @@ Will create a new ResourceType instance.
 
 If the corresponding study is not public, the auth token is required. In this case, if the user is not a data steward and the user is not granted access to the study, returns error code 403.
 
-##### `PATCH /resource_types/{id}`
+##### `PATCH /resource-types/{id}`
 
 - Auth: internal auth token with data steward role
-- Request Body: partial `ResourceType`(without `id`, `created` and `changed`)
+- Request Body: partial `ResourceType` (without `id`, `created`, and `changed`)
 - Returns: 204 or error code
 
-##### `DELETE /resource_types/{id}`
+##### `DELETE /resource-types/{id}`
 
 - Auth: internal auth token with data steward role
 - Returns: 200 or error code
@@ -724,19 +741,19 @@ Gets the AltAccession instance with the given alternative accession number and t
 
 The type `FILE_ID` is not allowed here to not expose internal numbers.
 
-#### File names
+#### Filenames
 
-##### `GET /file_names/{id}`
+##### `GET /filenames/{id}`
 
 - Auth: internal auth token with data steward role
 - Response Body: map from file accessions to objects with `name` and `alias` properties
 - Returns: 200 or error code
 
-Returns a mapping from all file accessions for the study with the given PID to the corresponding file names and aliases as they are submitted in the EM.
+Returns a mapping from all file accessions for the study with the given PID to the corresponding filenames and aliases as they are submitted in the EM.
 
 This endpoint is called by the frontend file mapping tool at the end of the upload process.
 
-##### `POST /file_names/{id}`
+##### `POST /filenames/{id}`
 
 - Auth: work order token for file mapping from UOS
 - Request Body: map from file accessions to internal file IDs
@@ -748,7 +765,7 @@ Should check whether the specified file accessions exist and all belong to the s
 
 Should then create an `AltAccession` instance with type `FILE_ID` for all entries in the passed map, where `pid` should be the key and `id` should be the value in the map.
 
-Should hen also republish the passed map for consumption by DINS and WPS.
+Should then also republish the passed map for consumption by DINS and WPS.
 
 ### RPC Style/Synchronous
 
@@ -776,7 +793,7 @@ The published AEM events shall have the following schema:
 - `study: Study` - the corresponding study with nested publication
 - `datasets: list[Dataset]` - the associated datasets with nested DAP and DAC
 
-The services also re-publishes file name mappings received from the UOS via the REST-API. The payload should be the exact same mapping, the study PID is not needed.
+The service also republishes filename mappings received from the UOS via the REST API. The payload should be the exact same mapping; the study PID is not needed.
 
 ## Human Resource/Time Estimation
 
