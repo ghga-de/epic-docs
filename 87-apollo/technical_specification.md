@@ -89,7 +89,7 @@ The Publication is the citation reference for the study. It is immutable and rec
 
 Attributes:
 
-- `id: str` - the PID of the Publication (primary key)
+- `id: str` - the PID of the publication (primary key)
 - `title: str` - the title of the publication
 - `abstract: str | None` - the abstract of the publication
 - `authors: list[str]` - the author(s) of the publication
@@ -149,8 +149,8 @@ Attributes:
 - `title: str` - comprehensive title for the dataset
 - `description: str` - detailed description summarizing this dataset
 - `types: list[DatasetType]` - the type(s) of this dataset
-- `study_id: str` - the PID of the study associated with this Dataset
-- `dap_id: str` - the code of the DAP for this Dataset
+- `study_id: str` - the PID of the study associated with this dataset
+- `dap_id: str` - the code of the DAP for this dataset
 - `files: list[str]` - the corresponding IDs (aliases) as specified in EM
 - `created: Date` - when the dataset was created
 - `changed: Date` - when the DAP for the dataset was last changed
@@ -315,23 +315,23 @@ The StudyStatus enum describes all possible states of a Study:
 - `APPROVED`
 - `PERSISTED`
 
-In the initial implementation we will only use the status values `PENDING` and `PERSISTED`, the other status values shall be rejected by the API for now.
+In the initial implementation, only the status values `PENDING` and `PERSISTED` are used; the API rejects the other status values for now.
 
 ### Core functionality
 
-The Study Registry Service can be accessed by a REST API in order to submit and query DAM, PAM, EM and lookup values (ResourceType entries). It also allows updating DAM and lookup values. The REST API is described further below.
+The Study Registry Service can be accessed through a REST API to submit and query DAM, PAM, EM, and lookup values (ResourceType entries). It also supports updates to DAM and lookup values. The REST API is described below.
 
 For now, the accession numbers should be created in the same way as before, assuming that the existing accessions have been imported into the database already, so that no duplicate accessions will be created.
 
 A newly submitted study shall always be created with the status `PENDING`.
 
-When the status is updated with the `PATCH /studies` endpoint, or when the `/rpc/publish` endpoint is called, the service should validate the submission as detailed below. If validation fails, the status update shall be rejected and the submission status shall not be changed.
+When the status is updated with the `PATCH /studies` endpoint, or when the `/rpc/publish/{id}` endpoint is called, the service should validate the submission as described below. If validation fails, the status update is rejected and the submission status remains unchanged.
 
-When the `/rpc/publish` endpoint is called and the submission has been successfully validated, the service will create new accession numbers for all resources contained in the EM and store them in the database as Accession, AltAccession, and EmAccessionMap. If the study had already been published before, accessions for resources that have been removed in the submission shall be deleted.
+When the `/rpc/publish/{id}` endpoint is called and the submission has been successfully validated, the service creates new accession numbers for all resources contained in the EM and stores them in the database as Accession, AltAccession, and EmAccessionMap. If the study was already published before, accessions for resources removed from the submission are deleted.
 
 The service will then create an AnnotatedEMPack and publish it as an event if the exact same AnnotatedEMPack has not been published before, as described further below.
 
-As another functionality, the service shall support the mapping of uploaded files to their experimental metadata entries. See the `POST /filenames` endpoint below.
+The service also supports mapping uploaded files to their experimental metadata entries. See the `POST /filenames` endpoint below.
 
 ### Validation
 
@@ -390,7 +390,7 @@ Typical user journey for a data steward creating a new study:
 - submits a new data access policy via `POST /daps` if needed
 - submits a new dataset type via `POST /resource-types` if needed
 - submits one or more datasets via `POST /datasets`
-- publishes the study via `POST /rpc/publish`
+- publishes the study via `POST /rpc/publish/{id}`
 - verifies that the preview looks good
 - uploads the corresponding files
   (Sarcastic Fringehead and Archaeopteryx epics):
@@ -400,15 +400,15 @@ Typical user journey for a data steward creating a new study:
   - maps the EM filenames to the uploaded filenames
   - UOS sends the mapping to the `POST /filenames` endpoint
 - data steward sets status to `PERSISTED` via `PATCH /studies`
-- publishes the study via `POST /rpc/publish`
+- publishes the study via `POST /rpc/publish/{id}`
 
 ## API Definitions
 
 ### RESTful/Synchronous
 
-The service provides an API that is accessible via the Data Portal. Through this API, data stewards can modify resources within the immutability constraints outlined in this document. Some read-only endpoints are also exposed publicly in the first implementation. This might be tightened up later when the corresponding information will be available elsewhere like via the API of the upcoming resource registry service, or we could make this configurable.
+The service provides an API that is accessible via the Data Portal. Through this API, data stewards can modify resources within the immutability constraints outlined in this document. In the first implementation, some read-only endpoints are also exposed publicly. This may be tightened later when the same information is available elsewhere (for example via the upcoming resource registry service API), or made configurable.
 
-In order to support the migration of the existing dataset-centric metadata that has already been imported into GHGA, we will need to extend the API with additional parameters or endpoints that allow taking over existing accession numbers or performing bulk imports without the data portal. Similar APIs might be added later to ingest metadata directly from other sources.
+To support migration of existing dataset-centric metadata that has already been imported into GHGA, the API will need additional parameters or endpoints for taking over existing accession numbers or performing bulk imports without the data portal. Similar APIs may be added later to ingest metadata directly from other sources.
 
 #### Study API
 
@@ -444,7 +444,7 @@ The user related fields should only be returned if the request is made by a data
 - Response Body: `Study`
 - Returns: 200 or error code
 
-If the study is not public, the auth token is required. In this case, if the user is not a data steward and the user is not granted access to the study, returns error code 403.
+If the study is not public, an auth token is required. If the user is neither a data steward nor granted access to the study, the service returns 403.
 
 The user related fields should only be returned if the request is made by a data steward.
 
@@ -454,18 +454,18 @@ The user related fields should only be returned if the request is made by a data
 - Request Body: new `status` and `users`
 - Returns: 204 or error code
 
-The `status` can only be moved from `PENDING` to `PERSISTED`, otherwise returns error code 409. The `users` field can only be set to `None` when the status is `PERSISTED`.
+The `status` can only be changed from `PENDING` to `PERSISTED`; otherwise, the service returns 409. The `users` field can only be set to `None` when the status is `PERSISTED`.
 
-When the status is changed, also validates the study similarly to the `/rpc/publish` endpoint, and returns error code 409 if the validation fails, without changing the status.
+When the status is changed, the service also validates the study, similarly to the `/rpc/publish/{id}` endpoint, and returns 409 if validation fails without changing the status.
 
 ##### `DELETE /studies/{id}`
 
 - Auth: internal auth token with data steward role
 - Returns: 200 or error code
 
-The study must have the status `PENDING`, otherwise returns error code 409.
+The study must have the status `PENDING`; otherwise, the service returns 409.
 
-Will also delete the corresponding experimental metadata, publications, and datasets, as well as all corresponding accessions.
+Also deletes the corresponding experimental metadata, publications, and datasets, as well as all corresponding accessions.
 
 #### ExperimentalMetadata API
 
@@ -475,9 +475,9 @@ Will also delete the corresponding experimental metadata, publications, and data
 - Request Body: `ExperimentalMetadata` (without `submitted`)
 - Returns: 204 or error code
 
-Will upsert a corresponding ExperimentalMetadata instance.
+Upserts the corresponding ExperimentalMetadata instance.
 
-The corresponding study must have the status `PENDING`, otherwise returns error code 409.
+The corresponding study must have the status `PENDING`; otherwise, the service returns 409.
 
 ##### `GET /metadata/{id}`
 
@@ -487,7 +487,7 @@ The corresponding study must have the status `PENDING`, otherwise returns error 
 
 The `id` must be the PID of the corresponding study.
 
-Gets the corresponding submitted, unprocessed ExperimentalMetadata instance.
+Returns the corresponding submitted, unprocessed ExperimentalMetadata instance.
 
 ##### `DELETE /metadata/{id}`
 
@@ -496,7 +496,7 @@ Gets the corresponding submitted, unprocessed ExperimentalMetadata instance.
 
 The `id` must be the PID of the corresponding study.
 
-The study must have the status `PENDING`, otherwise returns error code 409.
+The study must have the status `PENDING`; otherwise, the service returns 409.
 
 #### Publication API
 
@@ -507,11 +507,11 @@ The study must have the status `PENDING`, otherwise returns error code 409.
 - Response Body: `Publication`
 - Returns: 201 or error code
 
-Will upsert a corresponding Publication instance.
+Upserts the corresponding Publication instance.
 
 The PID will be automatically created.
 
-The corresponding study must have the status `PENDING`, otherwise returns error code 409.
+The corresponding study must have the status `PENDING`; otherwise, the service returns 409.
 
 ##### `GET /publications`
 
@@ -531,16 +531,16 @@ Only returns publications whose studies are either public or accessible to the u
 - Response Body: `Publication`
 - Returns: 200 or error code
 
-If the corresponding study is not public, the auth token is required. In this case, if the user is not a data steward and the user is not granted access to the study, returns error code 403.
+If the corresponding study is not public, an auth token is required. If the user is neither a data steward nor granted access to the study, the service returns 403.
 
 ##### `DELETE /publications/{id}`
 
 - Auth: internal auth token with data steward role
 - Returns: 200 or error code
 
-The corresponding study must have the status `PENDING`, otherwise returns error code 409.
+The corresponding study must have the status `PENDING`; otherwise, the service returns 409.
 
-Will also delete the accession number for the publication.
+Also deletes the accession number for the publication.
 
 #### DataAccessCommittee API
 
@@ -566,7 +566,7 @@ Gets all DataAccessCommittee instances.
 - Response Body: DataAccessCommittee
 - Returns: 200 or error code
 
-Gets the DataAccessCommittee instance with the given `id`.
+Returns the DataAccessCommittee instance with the given `id`.
 
 ##### `PATCH /dacs/{id}`
 
@@ -581,7 +581,7 @@ Updates one or more attributes of an existing DataAccessCommittee instance.
 - Auth: internal auth token with data steward role
 - Returns: 200 or error code
 
-If the corresponding DAC is referenced by any DAP, returns error code 409.
+If the corresponding DAC is referenced by any DAP, the service returns 409.
 
 Deletes a DataAccessCommittee instance.
 
@@ -609,7 +609,7 @@ Gets all DataAccessPolicy instances.
 - Response Body: DataAccessPolicy
 - Returns: 200 or error code
 
-Gets the DataAccessPolicy instance with the given `id`.
+Returns the DataAccessPolicy instance with the given `id`.
 
 ##### `PATCH /daps/{id}`
 
@@ -624,7 +624,7 @@ Updates one or more attributes of an existing DataAccessPolicy instance.
 - Auth: internal auth token with data steward role
 - Returns: 200 or error code
 
-If the corresponding DAP is referenced by any dataset, returns error code 409.
+If the corresponding DAP is referenced by any dataset, the service returns 409.
 
 Deletes a DataAccessPolicy instance.
 
@@ -637,11 +637,11 @@ Deletes a DataAccessPolicy instance.
 - Response Body: `Dataset`
 - Returns: 201 or error code
 
-Will upsert a corresponding Dataset instance.
+Upserts the corresponding Dataset instance.
 
 The PID will be automatically created.
 
-The corresponding study must have the status `PENDING`, otherwise returns error code 409.
+The corresponding study must have the status `PENDING`; otherwise, the service returns 409.
 
 ##### `GET /datasets`
 
@@ -662,7 +662,7 @@ Only returns datasets whose studies are either public or accessible to the user 
 - Response Body: `Dataset`
 - Returns: 200 or error code
 
-If the corresponding study is not public, the auth token is required. In this case, if the user is not a data steward and the user is not granted access to the study, returns error code 403.
+If the corresponding study is not public, an auth token is required. If the user is neither a data steward nor granted access to the study, the service returns 403.
 
 ##### `PATCH /datasets/{id}`
 
@@ -677,9 +677,9 @@ Changing the `dap_id` will be allowed even when the study is already in status `
 - Auth: internal auth token with data steward role
 - Returns: 200 or error code
 
-The corresponding study must have the status `PENDING`, otherwise returns error code 409.
+The corresponding study must have the status `PENDING`; otherwise, the service returns 409.
 
-Will also delete the accession number for the dataset.
+Also deletes the accession number for the dataset.
 
 #### ResourceType API
 
@@ -690,7 +690,7 @@ Will also delete the accession number for the dataset.
 - Response Body: `ResourceType`
 - Returns: 201 or error code
 
-Will create a new ResourceType instance.
+Creates a new ResourceType instance.
 
 ##### `GET /resource-types`
 
@@ -710,7 +710,7 @@ Gets all ResourceType instances.
 - Response Body: `ResourceType`
 - Returns: 200 or error code
 
-Gets the ResourceType instance with the given internal ID.
+Returns the ResourceType instance with the given internal ID.
 
 ##### `PATCH /resource-types/{id}`
 
@@ -725,7 +725,7 @@ Modifies the ResourceType instance with the given internal ID.
 - Auth: internal auth token with data steward role
 - Returns: 200 or error code
 
-If the resource type is still referenced by a corresponding resource, returns error code 409.
+If the resource type is still referenced by a corresponding resource, the service returns 409.
 
 Deletes a ResourceType instance.
 
@@ -736,16 +736,16 @@ Deletes a ResourceType instance.
 - Auth: None
 - Returns: 200 or error code 404 if accession doesn't exist
 
-Gets the Accession instance with the given primary accession number.
+Returns the Accession instance with the given primary accession number.
 
 ##### `GET /accession/{id}?type={type}`
 
 - Auth: None
 - Returns: 200 or error code 404 if accession doesn't exist
 
-Gets the AltAccession instance with the given alternative accession number and type.
+Returns the AltAccession instance with the given alternative accession number and type.
 
-The type `FILE_ID` is not allowed here to not expose internal numbers.
+The type `FILE_ID` is not allowed here to avoid exposing internal numbers.
 
 #### Filenames
 
@@ -767,11 +767,11 @@ This endpoint is called by the frontend file mapping tool at the end of the uplo
 
 This endpoint may only be called from UOS.
 
-Should check whether the specified file accessions exist and all belong to the study with the specified study PID.
+The service should check whether the specified file accessions exist and all belong to the study with the specified study PID.
 
-Should then upsert an `AltAccession` instance with type `FILE_ID` for all entries in the passed map, where `pid` should be the key and `id` should be the value in the map.
+The service should then upsert an `AltAccession` instance with type `FILE_ID` for all entries in the passed map, where `pid` is the key and `id` is the value in the map.
 
-Should then also republish the passed map for consumption by DINS and WPS.
+The service should then republish the passed map for consumption by DINS and WPS.
 
 ### RPC Style/Synchronous
 
@@ -782,15 +782,15 @@ Should then also republish the passed map for consumption by DINS and WPS.
 - Auth: internal auth token with data steward role
 - Returns: 204 or error code
 
-Triggers the publication of the study with the specified PID after verification that the necessary data is complete and valid. Returns error code 409 otherwise.
+Triggers publication of the study with the specified PID after verifying that the required data is complete and valid. Otherwise, the service returns 409.
 
-This endpoint may be called even before the study is persisted in order to pass the submitted study data to downstream services and make it visible in the data portal for preview.
+This endpoint may be called before the study is persisted to pass the submitted study data to downstream services and make it visible in the data portal for preview.
 
 ### Payload Schemas for Events
 
 The service publishes events that communicate the state of its entity instances.
 
-In particular, it publishes Annotated Experimental Metadata (AEM). This consists of the original, unmodified experimental metadata published along with additional annotations. These annotations contain all other study-related information and can be consumed by the experimental metadata transformation service and integrated into downstream transformed AEM.
+In particular, it publishes Annotated Experimental Metadata (AEM). This consists of the original, unmodified experimental metadata together with additional annotations. These annotations contain all other study-related information and can be consumed by the experimental metadata transformation service and integrated into downstream transformed AEM.
 
 The published AEM events shall have the following schema:
 
@@ -799,7 +799,7 @@ The published AEM events shall have the following schema:
 - `study: Study` - the corresponding study with nested publication
 - `datasets: list[Dataset]` - the associated datasets with nested DAP and DAC
 
-The payload should use slightly modified classes using embeddings instead of references.
+The payload should use slightly modified classes with embeddings instead of references.
 
 The service also republishes filename mappings received from the UOS via the REST API. The payload should be the exact same mapping; the study PID is not needed.
 
