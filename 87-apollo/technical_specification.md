@@ -33,10 +33,6 @@ Another change that needs to be considered in the implementation of the SRS is t
 - REST API as detailed below
 - Event publisher as detailed below
 
-### Optional
-
-TODO
-
 ### Not included
 
 The following features are not included in the first version of the study registry:
@@ -325,13 +321,15 @@ The Study Registry Service can be accessed by a REST API in order to submit and 
 
 For now, the accession numbers should be created in the same way as before, assuming that the existing accessions have been imported into the database already, so that no duplicate accessions will be created.
 
-A newly submitted study shall always be created with the status `PENDING`. When the status is updated to `PERSISTED`, the service should validate the submission as detailed below. If the validation fails, the status update should be rejected and the submission should keep the status `PENDING`.
+A newly submitted study shall always be created with the status `PENDING`.
 
-After the submission has been successfully validated and moved to the status `PERSISTED`, the service will create new accession numbers for all resources contained in the EM and store these in the database as Accession, AltAccession, and EmAccessionMap.
+When the status is updated with the `PATCH /studies` endpoint or the `/rpc/publish` endpoint is called, the service should validate the submission as detailed below. If the validation fails, the status update shall be rejected and the status of the submission shall no be changed.
+
+When the `/rpc/publish` endpoint is called and the submission has been successfully validated, the service will create new accession numbers for all resources contained in the EM and store these in the database as Accession, AltAccession, and EmAccessionMap. If the study had been already published before, accessions for resources that have been removed in the submission shall be deleted.
 
 The service will then create an AnnotatedEMPack and publish it as an event, as described further below.
 
-As another functionality, the service shall support the mapping of uploaded files to their experimental metadata entries. TODO: elaborate
+As another functionality, the service shall support the mapping of uploaded files to their experimental metadata entries. See the `POST /file_names` endpoint below.
 
 ### Validation
 
@@ -387,20 +385,20 @@ TODO (see AC: Metadata Services)
 
 The service provides an API that is accessible via the Data Portal. Through this API, data stewards can modify resources within the immutability constraints outlined in this document. Some read-only endpoints are also exposed publicly in the first implementation. This might be tightened up later when the corresponding information will be available elsewhere like via the API of the upcoming resource registry service, or we could make this configurable.
 
-In order to support the migration of the existing dataseet-centric metadata that already has been imported into GHGA, we will need to extend the API with additional parameters or end-points that allow taking over existing accession numbers or do bulk imports without the data portal. Similar APIs might be added later to ingest metadata directly from other sources.
+In order to support the migration of the existing dataset-centric metadata that already has been imported into GHGA, we will need to extend the API with additional parameters or end-points that allow taking over existing accession numbers or do bulk imports without the data portal. Similar APIs might be added later to ingest metadata directly from other sources.
 
 #### Study API
 
 ##### `POST /studies`
 
 - Auth: internal auth token with data steward role
-- Request Body: `Study` (without `id`, `status`, `users`, `created`)
+- Request Body: `Study` (without `id`, `status`, user and date related fields)
 - Response Body: `Study`
 - Returns: 201 or error code
 
 The PID will be automatically created.
 
-After this request, the new Study will have the status `PENDING` and an empty list of `users`.
+After this request, the new Study will have the status `PENDING` and the `users` list should contain only the user who submitted the study.
 
 ##### `GET /studies`
 
@@ -415,7 +413,7 @@ After this request, the new Study will have the status `PENDING` and an empty li
 
 Only returns studies that are either public or accessible to the user (i.e. the user must be a data steward of access must have been granted to the user).
 
-The `created_by` and `approved_by` fields should only be returned if the request is made by a data steward.
+The user related fields should only be returned if the request is made by a data steward.
 
 ##### `GET /studies/{id}`
 
@@ -425,7 +423,7 @@ The `created_by` and `approved_by` fields should only be returned if the request
 
 If the study is not public, the auth token is required. In this case, if the user is not a data steward and the user is not granted access to the study, returns error code 403.
 
-The `created_by` and `approved_by` fields should only be returned if the request is made by a data steward.
+The user related fields should only be returned if the request is made by a data steward.
 
 ##### `PATCH /studies/{id}`
 
@@ -433,7 +431,9 @@ The `created_by` and `approved_by` fields should only be returned if the request
 - Request Body: new `status` and `users`
 - Returns: 204 or error code
 
-The `status` can only be moved from `PENDING` to `PERSISTED`, otherwise returns error code 409. The `users` can be set to `None` or a list of user IDs, even when the `status` is already `PERSISTED`.
+The `status` can only be moved from `PENDING` to `PERSISTED`, otherwise returns error code 409. The `users` field can only be set to `None` when the status is `PERSISTED`.
+
+When the status is changed, also validates the study similar to the `/rpc/publish` endpoint, and returns error code 409 if the validation fails, without changing the status.
 
 ##### `DELETE /studies/{id}`
 
@@ -450,7 +450,7 @@ Will also delete the corresponding experimental metadata, publications and datas
 
 - Auth: internal auth token with data steward role
 - Request Body: `ExperimentalMetadata` (without `submitted`)
-- Returns: 204
+- Returns: 204 or error code
 
 Will upsert a corresponding ExperimentalMetadata instance.
 
@@ -722,21 +722,21 @@ The type `FILE_ID` is not allowed here to not expose internal numbers.
 
 #### File names
 
-##### `GET /file_names/{study_id}`
+##### `GET /file_names/{id}`
 
 - Auth: internal auth token with data steward role
 - Response Body: map from file accessions to objects with `name` and `alias` properties
 - Returns: 200 or error code
 
-Returns a mapping from all file accessions for the study with the given ID to the corresponding file names and aliases as they are submitted in the EM.
+Returns a mapping from all file accessions for the study with the given PID to the corresponding file names and aliases as they are submitted in the EM.
 
 This endpoint is called by the frontend file mapping tool at the end of the upload process.
 
-##### `POST /file_names/{study_id}`
+##### `POST /file_names/{id}`
 
 - Auth: work order token for file mapping from UOS
 - Request Body: map from file accessions to internal file IDs
-- Returns: 200 or error code
+- Returns: 204 or error code
 
 This endpoint may only be called from UOS.
 
@@ -745,6 +745,19 @@ Should check whether the specified file accessions exist and all belong to the s
 Should then create an `AltAccession` instance with type `FILE_ID` for all entries in the passed map, where `pid` should be the key and `id` should be the value in the map.
 
 Should hen also republish the passed map for consumption by DINS and WPS.
+
+### RPC Style/Synchronous
+
+#### Publication
+
+##### `POST /rpc/publish/{id}` 
+
+- Auth: internal auth token with data steward role
+- Returns: 204 or error code
+
+Triggers the publication of the study with the specified PID after verification that the necessary data is complete and valid. Returns error code 409 otherwise.
+
+This endpoint may be called even before the study is persisted in order to pass the submitted study data to downstream services and make it visible in the data portal for preview.
 
 ### Payload Schemas for Events
 
