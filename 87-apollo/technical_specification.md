@@ -68,6 +68,8 @@ Attributes:
 - `status: StudyStatus` - the current status of the study (see below)
 - `users: list[UUID] | None` - user(s) who can access the study (None means publicly accessible)
 - `created: Date` - when the entry was created
+- `created_by: UUID` - the id of the user who uploaded the study
+- `approved_by: UUID | None` - the id of the user who approved the study
 
 Note: Later, the Study should also have an attribute referencing the EMIM used in the submission. The experimental metadata itself is kept in a separate entity model described below.
 
@@ -152,6 +154,8 @@ Attributes:
 - `study_id: str` - the PID of the study associated with this Dataset
 - `dap_id: str` - the code of the DAP for this Dataset
 - `files: list[str]` - the corresponding IDs (aliases) as specified in EM
+- `created: Date` - when the Dataset was created
+- `changed: Date` - when the DAP for the Dataset was last changed
 
 New Dataset entity instances should only be created after verification that the corresponding Study and DataAccessPolicy entity instances exist, and that all specified files exist in EM and are specified only once.
 
@@ -381,7 +385,7 @@ TODO (see AC: Metadata Services)
 
 ### RESTful/Synchronous
 
-The service provides an API that is accessible via the Data Portal. Through this API, data stewards can modify resources within the immutability constraints outlined in this document. Some read-only endpoints are also exposed publicly in the first implementation. This might be tightened up later when the corresponding information will be available elsewhere like via the API of the upcoming resource registry service.
+The service provides an API that is accessible via the Data Portal. Through this API, data stewards can modify resources within the immutability constraints outlined in this document. Some read-only endpoints are also exposed publicly in the first implementation. This might be tightened up later when the corresponding information will be available elsewhere like via the API of the upcoming resource registry service, or we could make this configurable.
 
 In order to support the migration of the existing dataseet-centric metadata that already has been imported into GHGA, we will need to extend the API with additional parameters or end-points that allow taking over existing accession numbers or do bulk imports without the data portal. Similar APIs might be added later to ingest metadata directly from other sources.
 
@@ -390,8 +394,8 @@ In order to support the migration of the existing dataseet-centric metadata that
 ##### `POST /studies`
 
 - Auth: internal auth token with data steward role
-- Request Body: Study (without `id`, `status`, `users`, `created`)
-- Response Body: Study
+- Request Body: `Study` (without `id`, `status`, `users`, `created`)
+- Response Body: `Study`
 - Returns: 201 or error code
 
 The PID will be automatically created.
@@ -406,18 +410,22 @@ After this request, the new Study will have the status `PENDING` and an empty li
   - `type: StudyType` - filter for specific type
   - `text: str` - text filter (partial match in any plain text field)
   - `skip: int`, `limit: int`: used for pagination
-- Response Body: list[Study]
+- Response Body: `list[Study]`
 - Returns: 200 or error code
 
 Only returns studies that are either public or accessible to the user (i.e. the user must be a data steward of access must have been granted to the user).
 
+The `created_by` and `approved_by` fields should only be returned if the request is made by a data steward.
+
 ##### `GET /studies/{id}`
 
 - Auth: internal auth token (optional)
-- Response Body: Study
+- Response Body: `Study`
 - Returns: 200 or error code
 
-if the study is not public, the auth token is required. In this case, if the user is not a data steward and the user is not granted access to the study, returns error code 403.
+If the study is not public, the auth token is required. In this case, if the user is not a data steward and the user is not granted access to the study, returns error code 403.
+
+The `created_by` and `approved_by` fields should only be returned if the request is made by a data steward.
 
 ##### `PATCH /studies/{id}`
 
@@ -441,7 +449,7 @@ Will also delete the corresponding experimental metadata, publications and datas
 ##### `POST /metadata`
 
 - Auth: internal auth token with data steward role
-- Request Body: ExperimentalMetadata (without `submitted`)
+- Request Body: `ExperimentalMetadata` (without `submitted`)
 - Returns: 204
 
 Will upsert a corresponding ExperimentalMetadata instance.
@@ -451,7 +459,7 @@ The corresponding study must have the status `PENDING`, otherwise returns error 
 ##### `GET /metadata/{id}`
 
 - Auth: internal auth token with data steward role
-- Response Body: ExperimentalMetadata
+- Response Body: `ExperimentalMetadata`
 - Returns: 200 or error code
 
 The `id` must be the PID of the corresponding study.
@@ -472,9 +480,11 @@ The study must have the status `PENDING`, otherwise returns error code 409.
 ##### `POST /publications`
 
 - Auth: internal auth token with data steward role
-- Request Body: Publication (without `id`, `created`)
-- Response Body: {`id`: PID}
+- Request Body: `Publication` (without `id`, `created`)
+- Response Body: `Publication`
 - Returns: 201 or error code
+
+Will upsert a corresponding Publication instance.
 
 The PID will be automatically created.
 
@@ -487,7 +497,7 @@ The corresponding study must have the status `PENDING`, otherwise returns error 
   - `year: int` - filter for specific year
   - `text: str` - text filter (partial match in any plain text field)
   - `skip: int`, `limit: int`: used for pagination
-- Response Body: list[Publication]
+- Response Body: `list[Publication]`
 - Returns: 200 or error code
 
 Only returns publications whose studies are either public or accessible to the user (i.e. the user must be a data steward of access must have been granted to the user).
@@ -495,18 +505,10 @@ Only returns publications whose studies are either public or accessible to the u
 ##### `GET /publications/{id}`
 
 - Auth: internal auth token (optional)
-- Response Body: Publication
+- Response Body: `Publication`
 - Returns: 200 or error code
 
-if the corresponding study is not public, the auth token is required. In this case, if the user is not a data steward and the user is not granted access to the study, returns error code 403.
-
-##### `PATCH /publications/{id}`
-
-- Auth: internal auth token with data steward role
-- Request Body: new `dap_id`
-- Returns: 204 or error code
-
-Changing the `dap_id` will be allowed even when the study is already in status `PERSISTED`.
+If the corresponding study is not public, the auth token is required. In this case, if the user is not a data steward and the user is not granted access to the study, returns error code 403.
 
 ##### `DELETE /publications/{id}`
 
@@ -522,7 +524,7 @@ Will also delete the accession number for the publication.
 ##### `POST /dacs`
 
 - Auth: internal auth token with data steward role
-- Request Body: DataAccessCommittee (without `created` and `changed`)
+- Request Body: `DataAccessCommittee` (without `created` and `changed`)
 - Returns: 204 or error code
 
 Creates a new DataAccessCommittee instance.
@@ -530,7 +532,7 @@ Creates a new DataAccessCommittee instance.
 ##### `GET /dacs`
 
 - Auth: None
-- Response Body: list[DataAccessCommittee]
+- Response Body: `list[DataAccessCommittee]`
 - Returns: 200 or error code
 
 Gets all DataAccessCommittee instances.
@@ -546,7 +548,7 @@ Gets the DataAccessCommittee instance with the given `id`.
 ##### `PATCH /dacs/{id}`
 
 - Auth: internal auth token with data steward role
-- Request Body: partial DataAccessCommittee(without `id`, `created` and `changed`)
+- Request Body: partial `DataAccessCommittee`(without `id`, `created` and `changed`)
 - Returns: 204 or error code
 
 Updates one or more attributes of an existing DataAccessCommittee instance.
@@ -565,7 +567,7 @@ Deletes a DataAccessCommittee instance.
 ##### `POST /daps`
 
 - Auth: internal auth token with data steward role
-- Request Body: DataAccessPolicy (without `created` and `changed`)
+- Request Body: `DataAccessPolicy` (without `created` and `changed`)
 - Returns: 204 or error code
 
 Creates a new DataAccessCommittee instance.
@@ -589,7 +591,7 @@ Gets the DataAccessPolicy instance with the given `id`.
 ##### `PATCH /daps/{id}`
 
 - Auth: internal auth token with data steward role
-- Request Body: partial DataAccessPolicy(without `id`, `created` and `changed`)
+- Request Body: partial `DataAccessPolicy`(without `id`, `created` and `changed`)
 - Returns: 204 or error code
 
 Updates one or more attributes of an existing DataAccessPolicy instance.
@@ -603,17 +605,146 @@ If the corresponding DAP is referenced by any study, returns error code 409.
 
 Deletes a DataAccessPolicy instance.
 
----
+#### Dataset API
 
-TODO 
+##### `POST /datasets`
 
-Other endpoints:
+- Auth: internal auth token with data steward role
+- Request Body: `Publication` (without `id`, `created`, `changed`)
+- Response Body: `Dataset`
+- Returns: 201 or error code
 
-- continue with Dataset, ResourceType, Accession?, AltAccession?, File maps,....
-- An endpoint to fetch the file names and file accessions for a study (accessible if study is accessible)
-- An endpoint to post file accession to file id mappings
+Will upsert a corresponding Dataset instance.
 
----
+The PID will be automatically created.
+
+The corresponding study must have the status `PENDING`, otherwise returns error code 409.
+
+##### `GET /datasets`
+
+- Auth: internal auth token (optional)
+- Query parameters (all optional):
+  - `type: DatasetType` - filter for specific type
+  - `study_id: str` - filter for specific study
+  - `text: str` - text filter (partial match in any plain text field)
+  - `skip: int`, `limit: int`: used for pagination
+- Response Body: `list[Dataset]`
+- Returns: 200 or error code
+
+Only returns publications whose studies are either public or accessible to the user (i.e. the user must be a data steward of access must have been granted to the user).
+
+##### `GET /datasets/{id}`
+
+- Auth: internal auth token (optional)
+- Response Body: `Dataset`
+- Returns: 200 or error code
+
+If the corresponding study is not public, the auth token is required. In this case, if the user is not a data steward and the user is not granted access to the study, returns error code 403.
+
+##### `PATCH /datasets/{id}`
+
+- Auth: internal auth token with data steward role
+- Request Body: new `dap_id`
+- Returns: 204 or error code
+
+Changing the `dap_id` will be allowed even when the study is already in status `PERSISTED`.
+
+##### `DELETE /datasets/{id}`
+
+- Auth: internal auth token with data steward role
+- Returns: 200 or error code
+
+The corresponding study must have the status `PENDING`, otherwise returns error code 409.
+
+Will also delete the accession number for the dataset.
+
+#### ResourceType API
+
+##### `POST /resource_types`
+
+- Auth: internal auth token with data steward role
+- Request Body: `ResourceType` (without `id`, `created`, `changed`)
+- Response Body: `ResourceType`
+- Returns: 201 or error code
+
+Will create a new ResourceType instance.
+
+##### `GET /resource_types`
+
+- Auth: None
+- Query parameters (all optional):
+  - `resource: TypedResource` - filter for specific type
+  - `text: str` - text filter (partial match in any plain text field)
+  - `skip: int`, `limit: int`: used for pagination
+- Response Body: `list[ResourceType]`
+- Returns: 200 or error code
+
+##### `GET /resource_types/{id}`
+
+- Auth: None
+- Response Body: `ResourceType`
+- Returns: 200 or error code
+
+If the corresponding study is not public, the auth token is required. In this case, if the user is not a data steward and the user is not granted access to the study, returns error code 403.
+
+##### `PATCH /resource_types/{id}`
+
+- Auth: internal auth token with data steward role
+- Request Body: partial `ResourceType`(without `id`, `created` and `changed`)
+- Returns: 204 or error code
+
+##### `DELETE /resource_types/{id}`
+
+- Auth: internal auth token with data steward role
+- Returns: 200 or error code
+
+If the resource type is still referenced by a corresponding resource, returns error code 409.
+
+Deletes a ResourceType instance.
+
+#### Accession API
+
+##### `GET /accession/{id}`
+
+- Auth: None
+- Returns: 200 or error code 404 if accession doesn't exist
+
+Gets the Accession instance with the given primary accession number.
+
+##### `GET /accession/{id}?type={type}`
+
+- Auth: None
+- Returns: 200 or error code 404 if accession doesn't exist
+
+Gets the AltAccession instance with the given alternative accession number and type.
+
+The type `FILE_ID` is not allowed here to not expose internal numbers.
+
+#### File names
+
+##### `GET /file_names/{study_id}`
+
+- Auth: internal auth token with data steward role
+- Response Body: map from file accessions to objects with `name` and `alias` properties
+- Returns: 200 or error code
+
+Returns a mapping from all file accessions for the study with the given ID to the corresponding file names and aliases as they are submitted in the EM.
+
+This endpoint is called by the frontend file mapping tool at the end of the upload process.
+
+##### `POST /file_names/{study_id}`
+
+- Auth: work order token for file mapping from UOS
+- Request Body: map from file accessions to internal file IDs
+- Returns: 200 or error code
+
+This endpoint may only be called from UOS.
+
+Should check whether the specified file accessions exist and all belong to the study with the specified study PID.
+
+Should then create an `AltAccession` instance with type `FILE_ID` for all entries in the passed map, where `pid` should be the key and `id` should be the value in the map.
+
+Should hen also republish the passed map for consumption by DINS and WPS.
 
 ### Payload Schemas for Events
 
@@ -626,10 +757,12 @@ The published AEM events shall have the following schema:
 - `metadata: JSONObject` - the actual experimental metadata from ExperimentalMetadata
 - `accessions: JSONObject` - the corresponding maps from EmAccessionMap
 - `study: Study` - the corresponding study with nested publication
-- `datasets: list[Dataset]` - the associated datasets with nested DAP and DAC)
+- `datasets: list[Dataset]` - the associated datasets with nested DAP and DAC
+
+The services also re-publishes file name mappings received from the UOS via the REST-API. The payload should be the exact same mapping, the study PID is not needed.
 
 ## Human Resource/Time Estimation
 
-Number of sprints required: \<Insert a number.\>
+Number of sprints required: 3
 
-Number of developers required: \<Insert a number.\>
+Number of developers required: 2
