@@ -276,7 +276,7 @@ The DuoModifier enum lists all existing [DUO](https://www.ga4gh.org/product/data
 The existing DUO IDs, their shorthands, labels, and descriptions are available in a [CSV file](https://github.com/EBISPOT/DUO/blob/master/duo.csv). It currently contains 20 modifiers. The enum member name should be the shorthand, and the value should be the identifier:
 
 ```python
-class Modifier(StrEnum):
+class DuoModifier(StrEnum):
     RS = "DUO:0000012"
     HMB = "DUO:0000006"
     ...
