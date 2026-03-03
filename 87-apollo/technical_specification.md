@@ -331,7 +331,7 @@ When the `/rpc/publish/{id}` endpoint is called and the submission has been succ
 
 The service will then create an AnnotatedEMPack and publish it as an event if the exact same AnnotatedEMPack has not been published before, as described further below.
 
-The service also supports mapping uploaded files to their experimental metadata entries. See the `POST /filenames` endpoint below.
+The service also supports mapping uploaded files to their experimental metadata entries. See the `POST /file-ids` endpoint below.
 
 ### Validation
 
@@ -398,7 +398,7 @@ Typical user journey for a data steward creating a new study:
   - uploads all corresponding files using the connector
   - fetches filenames with the `GET /filenames` endpoint
   - maps the EM filenames to the uploaded filenames
-  - UOS sends the mapping to the `POST /filenames` endpoint
+  - UOS sends the mapping to the `POST /file-ids` endpoint
 - data steward sets status to `PERSISTED` via `PATCH /studies`
 - publishes the study via `POST /rpc/publish/{id}`
 
@@ -747,7 +747,7 @@ Returns the AltAccession instance with the given alternative accession number an
 
 The type `FILE_ID` is not allowed here to avoid exposing internal numbers.
 
-#### Filenames
+#### Filenames and File IDs
 
 ##### `GET /filenames/{id}`
 
@@ -759,7 +759,7 @@ Returns a mapping from all file accessions for the study with the given PID to t
 
 This endpoint is called by the frontend file mapping tool at the end of the upload process.
 
-##### `POST /filenames/{id}`
+##### `POST /file-ids/{id}`
 
 - Auth: work order token for file mapping from UOS
 - Request Body: map from file accessions to internal file IDs
