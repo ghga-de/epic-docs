@@ -759,15 +759,15 @@ Returns a mapping from all file accessions for the study with the given PID to t
 
 This endpoint is called by the frontend file mapping tool at the end of the upload process.
 
-##### `POST /file-ids`
+##### `POST /file-ids/{id}`
 
 - Auth: work order token for accession to file id mapping from UOS
 - Request Body: map from file accessions to internal file IDs
 - Returns: 204 or error code
 
-This endpoint may only be called from UOS.
+This endpoint may only be called by the UOS via a work order token, on behalf of a data steward. The UOS needs to verify that the user who made the mapping request is a data steward who manages a certain research data upload box and that all file ids in the mapping belong to that box. The user ID of the data steward should also be passed in the WOT so that it can be included in an audit log.
 
-The service should check whether the specified file accessions exist and are accessible. The user on whose behalf the request is made is specified in the work order token and should be included in the audit log. We rely on UOS to have verified that the user is a data steward. The request is usually made for one file upload box.
+The study registry service should check whether the specified file accessions exist and belong to the study with the specified PID.
 
 The service should then upsert an `AltAccession` instance with type `FILE_ID` for all entries in the passed map, where `pid` is the key and `id` is the value in the map.
 
