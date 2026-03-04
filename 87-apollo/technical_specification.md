@@ -115,7 +115,7 @@ Attributes:
 - `changed: Date` - when the DAC entry was last changed
 - `active: bool` - whether the DAC is still active
 
-Note: The `name` should correspond to the `alias` in the old model. The `id` should be derived from the name (shortened, converted to upper case). We do not assign a citable accession number to DACs anymore.
+Note: The `name` should be taken over from the `alias` in the old model which is already human readable. The `id` should then be derived from the name (shortened, converted to upper case, with underscores instead of blanks). We do not assign a citable accession number to DACs anymore.
 
 #### DataAccessPolicy
 
