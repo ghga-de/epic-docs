@@ -21,7 +21,7 @@ The Experimental Metadata should be managed in a generic way, without semantic i
 
 As a reminder, Experimental Metadata (EM) is data describing how the research data (that we store in “files”) was generated. Persistent Administrative Metadata (PAM) is non-experimental study metadata (e.g. authors, description), and Dynamic Administrative Metadata (DAM) is business metadata (e.g. authorized users, DAC contacts and policies). As the names indicate, PAM underlies the same archival immutability as the EM, while DAM is auditable.
 
-An Experimental Metadata Ingress Model (EMIM) shall be used for validation. EMIMs shall be stored as schemapacks, and the EM shall be stored as datapacks. Both structures are provided by the [schemapack](https://github.com/ghga-de/schemapack) library.
+An Experimental Metadata Ingress Model (EMIM) shall be used for validation. EMIMs shall be stored as schemapacks, and EM objects shall be stored in datapacks. Both structures are provided by the [schemapack](https://github.com/ghga-de/schemapack) library.
 
 All resources archived in GHGA that are subject to archival immutability can be retrieved by an accession number, a persistent identifier (PID) that always resolves to the exact same state of a resource.
 
