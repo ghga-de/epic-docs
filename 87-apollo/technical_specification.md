@@ -141,7 +141,7 @@ New DataAccessPolicy entity instances should only be created after verification 
 
 #### Dataset
 
-The Dataset entity describes a set of files and represents the smallest unit for which a data access request can be formulated. All attributes except `dap_id` are immutable, and Dataset entity instances cannot be deleted unless the study still has the status `PENDING`. However, new Dataset entity instances can be created after study creation and assigned to a study without violating its immutability. An immutable accession number is assigned upon creation. Every Dataset belongs to exactly one Study. The DataAccessPolicy assignment is mutable.
+The Dataset entity defines a subset of files in the EM and represents the smallest unit for which a data access request can be formulated. All attributes except `dap_id` (the DataAccessPolicy assigned to the Dataset) are immutable, and Dataset entity instances cannot be deleted unless the study still has the status `PENDING`. However, new Dataset entity instances can be created after Study instance creation and assigned to a Study instance without violating its immutability. An immutable accession number is assigned upon creation. Every Dataset belongs to exactly one Study, but a Study can have multiple Datasets.
 
 Attributes:
 
