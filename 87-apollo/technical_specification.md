@@ -24,7 +24,7 @@ All units of data archived in GHGA (as files or structured metadata objects) tha
 
 Another change that needs to be considered in the implementation of the RS is the new authorization concept that assumes all metadata is non-public by default. Public access to metadata or access restricted to certain users needs to be explicitly granted on the study level.
 
-Finally, the GHGA service registry should also manage the upload of the files that are referenced in the EM. To this end, it includes the functionality that had been implemented in the "Upload Orchestration Service" (UOS) and replaces it fully.
+Finally, the GHGA Registry Service should also manage the upload of the files referenced in the EM. To this end, it includes the functionality that had been implemented in the "Upload Orchestration Service" (UOS) and fully replaces it.
 
 ### Included/Required
 
@@ -43,7 +43,7 @@ The following features are not included in the first version of the GHGA registr
 
 - Migration of the existing submission store to the new Registry Service.
 - Change requests to existing studies. In the future, it should be possible to create a modified copy of an existing study.
-- Implementation of an EMIM registry or EM validation service (for now we will only integrate the ETMS).
+- Implementation of an EMIM registry or EM validation service (for now we will only integrate the EMTS).
 - Frontend to ingest submissions and manage dynamic administrative metadata and lookups.
 - Populating and updating lookup tables from existing dictionaries and ontologies.
 - Audit logging.
@@ -116,14 +116,14 @@ The DataAccessCommittee entity describes a Data Access Committee (DAC). It is ma
 Attributes:
 
 - `id: str` - the code of the DAC (short, uppercase) (primary key)
-- `name: str` - human readable name of the DAC
+- `name: str` - human-readable name of the DAC
 - `email: EmailStr` - the contact email address of the DAC
 - `institute: str` - the institute the DAC belongs to
 - `created: Date` - when the DAC entry was created
 - `changed: Date` - when the DAC entry was last changed
 - `active: bool` - whether the DAC is still active
 
-Note: The `name` should be taken over from the `alias` in the old model which is already human readable. The `id` should then be derived from the name (shortened, converted to upper case, with underscores instead of blanks). We do not assign a citable accession number to DACs anymore.
+Note: The `name` should be taken over from the `alias` in the old model, which is already human-readable. The `id` should then be derived from the name (shortened, converted to upper case, with underscores instead of blanks). We do not assign a citable accession number to DACs anymore.
 
 #### DataAccessPolicy
 
@@ -132,7 +132,7 @@ The DataAccessPolicy entity describes a policy for data access (DAP). It is mana
 Attributes:
 
 - `id: str` - the code of the DAP (short, uppercase) (primary key)
-- `name: str` - human readable name of the DAP
+- `name: str` - human-readable name of the DAP
 - `description: str` - a longer description of the DAP
 - `text: str` - the complete text for the DAP
 - `url: Url | None` - if available, the URL for the DAP
@@ -174,15 +174,15 @@ Attributes:
 - `id: UUID` - internal ID (primary key)
 - `code: str` - the code of the resource type (short, uppercase with underscores)
 - `resource: TypedResource` - the kind of resource this type belongs to
-- `name: str` - the human readable name of the resource type
+- `name: str` - the human-readable name of the resource type
 - `description: str | None` - optional definition text or help text
 - `created: Date` - when the resource type was created
 - `changed: Date` - when the resource type was last changed
 - `active: bool` - whether the resource type is still active
 
-The corresponding collection should be created with a composite index on `code` and `resource`. Resources like Study or Dataset should use the `code` to reference the resource type. This makes the resource interpretable  without needing to lookup the full resource type and compatible with the types used by EGA.
+The corresponding collection should be created with a composite index on `code` and `resource`. Resources like Study or Dataset should use the `code` to reference the resource type. This makes the resource interpretable without needing to look up the full resource type and keeps it compatible with the types used by EGA.
 
-The `name` is a human readable form of the `code` (normal case, blanks instead of underscores, maybe slightly longer). The `description` should be a longer human readable text that fully describes the resources type. The `name` will be typically used for faceting, the `description` will be shown on detail pages or as help text to explain the exact meaning of the type.
+The `name` is a human-readable form of the `code` (normal case, blanks instead of underscores, maybe slightly longer). The `description` should be a longer human-readable text that fully describes the resource type. The `name` will typically be used for faceting, while the `description` will be shown on detail pages or as help text to explain the exact meaning of the type.
 
 The corresponding collection can be populated with the study types as defined in the existing GHGA metadata schema. The existing dataset types need to be extracted from the current submission store, as they are not defined in the existing GHGA schema. Note that currently we have an inconsistency in the data - study types are stored in `code` form, while `dataset` types are stored in `name` form. The migration step should fix this inconsistency.
 
@@ -210,7 +210,7 @@ Attributes:
 - `type: AltAccessionType` - the type of alternative accession
 - `created: Date` - when the alternative accession was created
 
-Note that we also store the internal file IDs (UUIDs) AltAccessions with type `FILE_ID`.
+Note that we also store the internal file IDs (UUIDs) as AltAccession entries with type `FILE_ID`.
 
 #### EmAccessionMap
 
@@ -252,21 +252,21 @@ This entity model has been separated from the Study entity model because the acc
 
 Note: In the new PID schema, accessions are derived from the study ID and the original submission identifier. This means, in theory, we would not need to store these mappings. However, keeping them allows us to support accession numbers that cannot be directly derived, and to resolve accessions using the old PID schema if we choose not to generate new accession numbers for existing data.
 
-#### ResearchDateAUploadBox
+#### ResearchDataUploadBox
 
 The ResearchDataUploadBox entity stores Research Data Upload Box (RDUB) objects that reference corresponding raw FileUploadBoxes (FUB) provided by the download controller service (DCS).
 
 Attributes:
 
 - `id: UUID` - internal ID of the RDUB
-- `version` int - counter indicating the RDUB version
+- `version: int` - counter indicating the RDUB version
 - `state: UploadBoxState` - current state of the RDUB
-- `title: str` - shhort human readable name for the RDUB
+- `title: str` - short human-readable name for the RDUB
 - `description: str` - describes the RDUB in more detail
 - `changed: Date` - when the RDUB was last changed
 - `changed_by: UUID` - user who performed the latest change
-- `file_upload_box_id` - ID of the corresponding FUB in the DCS
-- `file_upload_box_version` - counter indicating FUB version
+- `file_upload_box_id: UUID` - ID of the corresponding FUB in the DCS
+- `file_upload_box_version: int` - counter indicating the FUB version
 - `file_upload_box_state: UploadBoxState` - current state of the file upload box
 - `file_count: int` - number of files in the box
 - `size: int` - the total size of all files in the box
@@ -305,7 +305,7 @@ The DatasetType enum lists all possible Dataset types. It is populated at servic
 
 #### DuoModifier
 
-The DuoModifier enum lists all existing [DUO](https://www.ga4gh.org/product/data-use-ontology-duo/) modifiers. These are descendants of 'DUO:0000017: data use modifier' (e.g. 'DUO:0000043').
+The DuoModifier enum lists all existing [DUO](https://www.ga4gh.org/product/data-use-ontology-duo/) modifiers. These are descendants of `DUO:0000017: data use modifier` (e.g. `DUO:0000043`).
 
 The existing DUO IDs, their shorthands, labels, and descriptions are available in a [CSV file](https://github.com/EBISPOT/DUO/blob/master/duo.csv). It currently contains 20 modifiers. The enum member name should be the shorthand, and the value should be the identifier:
 
@@ -318,7 +318,7 @@ class DuoModifier(StrEnum):
 
 #### DuoPermission
 
-The DuoPermission enum lists all existing [DUO](https://www.ga4gh.org/product/data-use-ontology-duo/) permissions. These are descendants of 'DUO:0000001: data use permission' (e.g. 'DUO:0000004').
+The DuoPermission enum lists all existing [DUO](https://www.ga4gh.org/product/data-use-ontology-duo/) permissions. These are descendants of `DUO:0000001: data use permission` (e.g. `DUO:0000004`).
 
 The existing DUO IDs, their shorthands, labels, and descriptions are available in a [CSV file](https://github.com/EBISPOT/DUO/blob/master/duo.csv). It currently contains 5 permissions. The enum member name should be the shorthand, and the value should be the identifier:
 
@@ -351,7 +351,7 @@ We might add more status values like `FROZEN` or `APPROVED` when we introduce a 
 
 #### UploadBoxState
 
-The UploadBoxState enum lists all possible states that a RDUB or FUB can have. 
+The UploadBoxState enum lists all possible states that an RDUB or FUB can have.
 
 - `OPEN`
 - `LOCKED`
@@ -363,21 +363,21 @@ The Registry Service can be accessed through a REST API to submit and query DAM,
 
 A newly submitted study will always be created with the status `DRAFT`.
 
-The service has several endpoints for submitting all data belonging to a study. Any endpoint shall validate the received data immediately and reject it in case of a validation. Particularly, it should not be possible to submit invalid EM.
+The service has several endpoints for submitting all data belonging to a study. Any endpoint shall validate the received data immediately and reject it in case of a validation error. In particular, it should not be possible to submit invalid EM.
 
-When any such data has been successfully modified, the service shall check which study is affected by the change. These can be multiple if e.g. the name of a DAC is changed. For all of these studies which have corresponding EM, a new AnnotatedEMPack shall be create and published for consumption by the EM transformation service (EMTS). This will update these studies in the data portal.
+When any such data has been successfully modified, the service shall check which studies are affected by the change. These can be multiple if, for example, the name of a DAC is changed. For all affected studies that have corresponding EM, a new AnnotatedEMPack shall be created and published for consumption by the EM transformation service (EMTS). This will update these studies in the data portal.
 
-The service also provides endpoints with functionality that helps creating research data uploading boxes for uploading the research data files belonging to a study and mapping these files to corresponding entries in the submitted EM.
+The service also provides endpoints with functionality that helps create research data upload boxes for uploading the research data files belonging to a study and mapping these files to corresponding entries in the submitted EM.
 
 ### Accessions (PIDs)
 
 The entire service and client stack must be agnostic regarding the structure of accessions and be able to process arbitrary strings.
 
-The previously issued accessions (GHGA[A-Z][0-9]{14}) will be kept for already accepted studies, either remaining as their primary accessions or as special AltAccessions of type `GHGA_LEGACY` - this still needs to be decided.
+The previously issued accessions (`GHGA[A-Z][0-9]{14}`) will be kept for already accepted studies, either remaining as their primary accessions or as special AltAccession entries of type `GHGA_LEGACY`; this still needs to be decided.
 
- Newly accepted studies as well as future revisions of those early studies will follow the new schema.
- 
- TBD: This section shall be updated when we decided the exact schema (handling of version numbers, global uniqueness of metadata identifiers for one study etc.)
+Newly accepted studies, as well as future revisions of those early studies, will follow the new schema.
+
+TBD: This section shall be updated when we decide the exact schema (handling of version numbers, global uniqueness of metadata identifiers for one study, etc.).
 
 ### Accession registry
 
@@ -408,11 +408,11 @@ With the introduction of study-centric metadata processing, we also introduce au
 
 These metadata access grants will be managed by the claims repository service (CRS), just like the existing access grants for download and upload.
 
-If in the upload process, other users than the supporting data steward should also be able to review uploaded studies before archival, these need to be explicitly granted access. When the study is archived, it can be made accessible to more individual users or can be made fully public. When a study is made public, the CRS will automatically removed all existing individual grants for the study.
+If, during the upload process, users other than the supporting data steward should also be able to review uploaded studies before archival, they need to be explicitly granted access. When the study is archived, it can be made accessible to more individual users or be made fully public. When a study is made public, the CRS will automatically remove all existing individual grants for the study.
 
 If some parts of a study with public metadata shall not be made public, these parts must be provided as files contained in a dataset that needs to be requested like other datasets, and not be provided along with the other metadata.
 
-Since this service does not provide a public interface for security reasons, the GHGA registry service provides endpoints that allow management of the metadata access grants, acting as a proxy to the CRS.
+Since this service does not provide a public interface for security reasons, the GHGA Registry Service provides endpoints that allow management of the metadata access grants, acting as a proxy to the CRS.
 
 ## User Journeys
 
@@ -436,7 +436,7 @@ Typical user journey for a data steward creating a new study:
 - maps the EM filenames to the uploaded filenames
 - sends the mapping to the `POST /file-ids` endpoint
 - data steward sets status to `ARCHIVED` via `PATCH /studies`
-- data stewards adds public grant via `POST /access...`
+- data steward adds a public grant via `POST /study-grants`
 
 ## API Definitions
 
@@ -711,7 +711,7 @@ If not requested by a data steward, only returns datasets for studies that are e
 - Request Body: new `dap_id`
 - Returns: 204 or error code
 
-Changing the `dap_id` will be allowed even when the study is already in status `PERSISTED`.
+Changing the `dap_id` will be allowed even when the study is already in status `ARCHIVED`.
 
 ##### `DELETE /datasets/{id}`
 
@@ -804,7 +804,7 @@ Creates a metadata access grant for the given Study PID and the given list of us
 
 Note that no expiration date needs to be passed, since these grants never expire. Also, these grants are not bound to an IVA.
 
-The SR must use the CRS to store the access grants to the claims repository.
+The SR must use the CRS to store the access grants in the claims repository.
 
 ##### `GET /study-grants`
 
@@ -815,11 +815,11 @@ The SR must use the CRS to store the access grants to the claims repository.
 - Response Body: object with study PIDs as key and a list of user IDs or `None` as value
 - Returns: 200 or error code
 
-Returns a list of all metadata access grants, filtered according to the specified query parameters. If multiple user IDs are specified, only grants for any of these users will be returned. If `None` is specified as a user ID, then public grants and grants for all the other specified users are returned. If no user ID is passed, all public grants and user-related grants will be returned (these can be many).
+Returns a list of all metadata access grants, filtered according to the specified query parameters. If a user ID is specified, only grants for that user will be returned. If `None` is specified as a user ID, then public grants are returned. If no user ID is passed, all public grants and user-related grants will be returned (these can be many).
 
 The response will return an object whose entries correspond to the existing metadata access grants. The keys refer to the study PIDs, and the values will be either `None` if there is a public grant, or a non-empty list of the IDs of all users who are allowed to view the study and its metadata.
 
-The SR must use the CRS to fetch the access grants to the claims repository.
+The SR must use the CRS to fetch the access grants from the claims repository.
 
 ##### `DELETE /study-grants/{study_id}`
 
@@ -830,14 +830,14 @@ Deletes all access grants for the Study with the given PID.
 
 To delete an access grant for individual users, use the `GET` endpoint with the corresponding study PID, remove the users from the returned list, and submit it with the same study PID via the `POST` endpoint.
 
-The SR must use the CRS to remove the access grants to the claims repository.
+The SR must use the CRS to remove the access grants from the claims repository.
 
 ##### `POST /upload-grants`
 
 - Auth: internal auth token with data steward role
 - Request body:
   - `box_id: UUID`
-  - `user_id: int` 
+  - `user_id: UUID`
   - `iva_id: UUID`
   - `valid_from: Date`
   - `valid_until: Date`
@@ -955,7 +955,7 @@ Once archived, the box may no longer be modified, and files in the box will be m
 - Response body: `list[FileUploadWithAccession]`
 - Returns: 200 or error code (particularly, 403 or 404)
 
-List the details of all files uploads for the specified RDUB.
+Lists the details of all file uploads for the specified RDUB.
 
 The `FileUploadWithAccession` contains all the fields from the shared GHGA event schema `FileUploadWithAccession` plus an optional file accession (for files that have been already mapped).
 
@@ -967,10 +967,10 @@ Data stewards have access to all boxes, while regular users may only access boxe
 - Request Body:
   - `version: int` - the current RDUB version
   - `mapping: dict[str, UUID]` - mapping from file accessions to internal file IDs
-  - `study_id`: - the ID of the corresponding study
+  - `study_id: str` - the ID of the corresponding study
 - Returns: 204 or error code
 
-Ingests a filename mapping for the Research Data Upload Box with the given id.
+Ingests a filename mapping for the Research Data Upload Box with the given ID.
 
 As a safety measure, the SR must verify that all accessions in the mapping belong to the study with the specified PID and that all file IDs in the mapping belong to the box with the given ID, and respond with an error code 409 otherwise.
 
