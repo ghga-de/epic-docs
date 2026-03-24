@@ -1,49 +1,49 @@
-# Initial Version of a Study Registry Service (Apollo)
+# Initial Version of the GHGA Registry Service (Apollo)
 
 **Epic Type:** Implementation Epic
-
-Epic planning and implementation follow the
-[Epic Planning and Marathon SOP](https://ghga.pages.hzdr.de/internal.ghga.de/main/sops/development/epic_planning/).
 
 ## Scope
 
 ### Outline
 
-The Study Registry Service (SRS) is the core GHGA registry service responsible for ingesting and archiving metadata from data submitters.
+The GHGA Registry Service (RS) is the core service responsible for ingesting and archiving metadata from data submitters.
 
 Its function is currently implemented by the [GHGA Data Steward Kit](https://github.com/ghga-de/ghga-datasteward-kit) in conjunction with the submission store and accession store managed via the [metldata](https://github.com/ghga-de/metldata) library.
 
-More precisely, the service replaces the Submission Registry and the Accession Registry managed via metldata and stored on the file system of a virtual machine operated by a GHGA central data steward. The submissions are now stored in a database owned by the SRS.
+More precisely, the service replaces the Submission Registry and the Accession Registry managed via metldata and stored on the file system of a virtual machine operated by a GHGA central data steward. The submissions are now stored in a database owned by the RS.
 
-The second crucial change introduced with the SRS is the separation of Experimental Metadata from Persistent Administrative Metadata, Dynamic Administrative Metadata, and Datasets, which were previously bundled into an all-in-one [GHGA metadata schema](https://github.com/ghga-de/ghga-metadata-schema), and the move from the former dataset-centric metadata concept to a study-centric one.
+The second crucial change introduced with the RS is the separation of Experimental Metadata from Persistent Administrative Metadata, Dynamic Administrative Metadata, and Datasets, which were previously bundled into an all-in-one [GHGA metadata schema](https://github.com/ghga-de/ghga-metadata-schema), and the move from the former dataset-centric metadata concept to a study-centric one.
 
 The Experimental Metadata should be managed in a generic way, without semantic interpretation of its content besides generating an accession number for each entity.
 
-As a reminder, Experimental Metadata (EM) is data describing how the research data (that we store in “files”) was generated. Persistent Administrative Metadata (PAM) is non-experimental study metadata (e.g. authors, description), and Dynamic Administrative Metadata (DAM) is business metadata (e.g. authorized users, DAC contacts and policies). As the names indicate, PAM underlies the same archival immutability as the EM, while DAM is auditable.
+As a reminder, Experimental Metadata (EM) is structured data describing how the research data (in the broader sense, all the data that we store in “files”) was generated. Persistent Administrative Metadata (PAM) is non-experimental study metadata (e.g. authors, description), and Dynamic Administrative Metadata (DAM) is business metadata (e.g. DAC contacts and policies). As the names indicate, PAM underlies the same archival immutability as the EM, while DAM is auditable.
 
 An Experimental Metadata Ingress Model (EMIM) shall be used for validation. EMIMs shall be stored as schemapacks, and EM objects shall be stored in datapacks. Both structures are provided by the [schemapack](https://github.com/ghga-de/schemapack) library.
 
-All resources archived in GHGA that are subject to archival immutability can be retrieved by an accession number, a persistent identifier (PID) that always resolves to the exact same state of a resource.
+All units of data archived in GHGA (as files or structured metadata objects) that are subject to archival immutability can be retrieved by an accession number, a persistent identifier (PID) that always resolves to the exact same state of a resource. How PIDs are generated will be covered in more detail below.
 
-Another change that needs to be considered in the implementation of the SRS is the new authorization concept that assumes all metadata is non-public by default. Public access to metadata or access restricted to certain users (usually the submitter) needs to be explicitly granted on the study level.
+Another change that needs to be considered in the implementation of the RS is the new authorization concept that assumes all metadata is non-public by default. Public access to metadata or access restricted to certain users needs to be explicitly granted on the study level.
 
 ### Included/Required
 
-- First implementation of the Study Registry Service
+- First implementation of the GHGA Registry Service
 - REST API as detailed below
 - Event publisher as detailed below
+- UOS functionality as detailed below
+- Accession number management
+- Integration with EMTS (EM transformation service)
+- Transition to a new PID schema
+- Implementation of a new authorization concept for metadata
 
 ### Not included
 
-The following features are not included in the first version of the study registry:
+The following features are not included in the first version of the GHGA registry service:
 
-- Migration of the existing submission store to the Study Registry Service.
+- Migration of the existing submission store to the new Registry Service.
 - Change requests to existing studies. In the future, it should be possible to create a modified copy of an existing study.
-- New PID schema.
-- Support for multiple or versioned EMIMs, integration of an EMIM registry.
+- Implementation of an EMIM registry or EM validation service (for now we will only integrate the ETMS).
 - Frontend to ingest submissions and manage dynamic administrative metadata and lookups.
 - Populating and updating lookup tables from existing dictionaries and ontologies.
-- Implementation of the EM validation service.
 - Audit logging.
 
 ## Implementation Details
@@ -59,17 +59,21 @@ Attributes:
 - `id: str` - the PID of the study (primary key)
 - `title: str` - comprehensive title for the study
 - `description: str` - detailed description (abstract) describing the goals of the study
-- `types: list[StudyType]` - the type(s) of this study
+- `types: list[StudyType]` - the type(s) of this study (as list of codes)
 - `affiliations: list[str]` - the affiliation(s) associated with this study
 - `status: StudyStatus` - the current status of the study (see below)
-- `users: list[UUID] | None` - user(s) who can access the study (None means publicly accessible)
-- `created: Date` - when the entry was created
+- `created: Date` - when the entry was first created
 - `created_by: UUID` - the id of the user who uploaded the study
+- `approved: Date` - when the study was approved
 - `approved_by: UUID | None` - the id of the user who approved the study
+- `superseded_by_id: str` - if deprecated, the PID of a newer study
+- `has_em: bool` - computed field: True if EM has been uploaded already
+- `num_datasets: int` - computed field: Number of datasets for this study
+- `num_publications: int` - computed field: Number of publications for this study
 
-The `status` and `users` fields can be updated by the data steward. Currently, the status can only be changed from `PENDING` to `PERSISTED`. Additional status changes may be supported later. The `users` field is used for authorization (see the corresponding section) and may be removed later when authorization is handled via the claims repository. The `approved_by` field is automatically set to the user ID of the data steward when the study is persisted.
+The `status` field can be updated by the data steward. When newly created, the status of the study is `DRAFT`. In this state, the study is still editable. Once set to `ARCHIVED`, the study becomes immutable, and the status cannot be changed anymore.
 
-Note: Later, the Study should also have an attribute referencing the EMIM used in the submission. The experimental metadata itself is kept in a separate entity model described below.
+The `approved_by` field is automatically set to the user ID of the data steward who set the state to `ARCHIVED`.
 
 #### ExperimentalMetadata
 
@@ -79,17 +83,19 @@ Attributes:
 
 - `id: str` - the PID of the study to which the experimental metadata belongs
 - `metadata: JsonObject` - the experimental metadata exactly as submitted
+- `model: str` - the name of the EMIM that can be used to validate the data
 - `submitted: Date` - when the experimental metadata was submitted
+- `submitted_by: UUID | None` - the id of the user who submitted the data
 
 This entity model has been separated from the Study entity model because the metadata can be large (might require GridFS) and is usually accessed separately from the study after transformation.
 
 #### Publication
 
-The Publication is the citation reference for the study. It is immutable and receives a permanent accession number upon creation.
+The Publication is the citation reference for the study. It is managed independently of any study and is mutable, and a study is not required to have a publication.
 
 Attributes:
 
-- `id: str` - the PID of the publication (primary key)
+- `id: str` - the internal ID of the publication (primary key)
 - `title: str` - the title of the publication
 - `abstract: str | None` - the abstract of the publication
 - `authors: list[str]` - the author(s) of the publication
@@ -99,7 +105,7 @@ Attributes:
 - `study_id: str` - the PID of the study associated with this publication
 - `created: Date` - when the entry was created
 
-New Publication entity instances should only be created after verification that the corresponding Study entity instance exists.
+New Publication entity instances should only be created after verification that the corresponding Study entity instance exists. Normally, there will be one publication per study, but we also allow the case of zero or more than one publications.
 
 #### DataAccessCommittee
 
@@ -141,14 +147,14 @@ New DataAccessPolicy entity instances should only be created after verification 
 
 #### Dataset
 
-The Dataset entity defines a subset of files in the EM and represents the smallest unit for which a data access request can be formulated. All attributes except `dap_id` (the DataAccessPolicy assigned to the Dataset) are immutable, and Dataset entity instances cannot be deleted unless the study still has the status `PENDING`. However, new Dataset entity instances can be created after Study instance creation and assigned to a Study instance without violating its immutability. An immutable accession number is assigned upon creation. Every Dataset belongs to exactly one Study, but a Study can have multiple Datasets.
+The Dataset entity defines a subset of files in the EM and represents the smallest unit for which a data access request can be formulated. All attributes except `dap_id` (the DataAccessPolicy assigned to the Dataset) are immutable, and Dataset entity instances cannot be deleted unless the study still has the status `DRAFT`. However, new Dataset entity instances can be created after Study instance creation and assigned to a Study instance without violating its immutability, even if the study already has the status `ARCHIVED`. An immutable accession number is assigned upon creation. Every Dataset belongs to exactly one Study, but a Study can have multiple Datasets.
 
 Attributes:
 
 - `id: str` - the PID of the Dataset (primary key)
 - `title: str` - comprehensive title for the dataset
 - `description: str` - detailed description summarizing this dataset
-- `types: list[DatasetType]` - the type(s) of this dataset
+- `types: list[DatasetType]` - the type(s) of this dataset (as list of codes)
 - `study_id: str` - the PID of the study associated with this dataset
 - `dap_id: str` - the code of the DAP for this dataset
 - `files: list[str]` - the corresponding IDs (aliases) as specified in EM
@@ -164,7 +170,7 @@ The ResourceType entity holds the possible types for studies and datasets (could
 Attributes:
 
 - `id: UUID` - internal ID (primary key)
-- `code: str` - the code of the resource type (short, uppercase)
+- `code: str` - the code of the resource type (short, uppercase with underscores)
 - `resource: TypedResource` - the kind of resource this type belongs to
 - `name: str` - the human readable name of the resource type
 - `description: str | None` - optional definition text or help text
@@ -172,9 +178,11 @@ Attributes:
 - `changed: Date` - when the resource type was last changed
 - `active: bool` - whether the resource type is still active
 
-The corresponding collection should be created with a composite index on `code` and `resource`.
+The corresponding collection should be created with a composite index on `code` and `resource`. Resources like Study or Dataset should use the `code` to reference the resource type. This makes the resource interpretable  without needing to lookup the full resource type and compatible with the types used by EGA.
 
-The corresponding collection can be populated with the study types as defined in the existing GHGA metadata schema. The existing dataset types need to be extracted from the current submission store, as they are not defined in the existing schema.
+The `name` is a human readable form of the `code` (normal case, blanks instead of underscores, maybe slightly longer). The `description` should be a longer human readable text that fully describes the resources type. The `name` will be typically used for faceting, the `description` will be shown on detail pages or as help text to explain the exact meaning of the type.
+
+The corresponding collection can be populated with the study types as defined in the existing GHGA metadata schema. The existing dataset types need to be extracted from the current submission store, as they are not defined in the existing GHGA schema. Note that currently we have an inconsistency in the data - study types are stored in `code` form, while `dataset` types are stored in `name` form. The migration step should fix this inconsistency.
 
 #### Accession
 
@@ -185,7 +193,7 @@ Attributes:
 - `id: str` - the primary accession number (PID)
 - `type: AccessionType` - the entity type referenced by this accession
 - `created: Date` - when the accession was created
-- `superseded_by: str | None` - if deprecated, a new primary accession
+- `superseded_by_id: str | None` - if deprecated, a new primary accession
 
 Note: When we start introducing versioned accession numbers, we can consider splitting this into two entity models, one for holding the base accession numbers, and another one for holding the versioned ones.
 
@@ -200,6 +208,8 @@ Attributes:
 - `type: AltAccessionType` - the type of alternative accession
 - `created: Date` - when the alternative accession was created
 
+Note that we also store the internal file IDs (UUIDs) AltAccessions with type `FILE_ID`.
+
 #### EmAccessionMap
 
 The EmAccessionMap entity stores mappings from submitted IDs to primary accessions.
@@ -209,7 +219,7 @@ Attributes:
 - `id: str` - the PID of the study to which the experimental metadata belongs
 - `maps: dict[str, dict[str, str]]` - per-resource-type accession maps
 
-The `maps` attribute holds, for every resource in the experimental metadata, a mapping from the identifier used in the original submission (the "alias" field in the current metadata schema) to the primary accession generated by the Study Registry Service and stored as an Accession in the database.
+The `maps` attribute holds, for every resource in the experimental metadata, a mapping from the identifier used in the original submission (the "alias" field in the current metadata schema) to the primary accession generated by the Registry Service and stored as an Accession in the database.
 
 Example:
 
@@ -237,6 +247,9 @@ Example:
 These maps are automatically generated by the service after EM has been submitted.
 
 This entity model has been separated from the Study entity model because the accession maps can be large (might require GridFS) and the original accessions are rarely needed after transformation.
+
+Note: In the new PID schema, accessions are derived from the study ID and the original submission identifier. This means, in theory, we would not need to store these mappings. However, keeping them allows us to support accession numbers that cannot be directly derived, and to resolve accessions using the old PID schema if we choose not to generate new accession numbers for existing data.
+
 
 ### Enums
 
@@ -310,43 +323,36 @@ The TypedResource enum lists all resources whose types are managed by this servi
 
 The StudyStatus enum describes all possible states of a Study:
 
-- `PENDING`
-- `FROZEN`
-- `APPROVED`
-- `PERSISTED`
+- `DRAFT` (study is still editable and in preview mode only)
+- `ARCHIVED` (study has been archived and has become immutable)
 
-In the initial implementation, only the status values `PENDING` and `PERSISTED` are used; the API rejects the other status values for now.
+We might add more status values like `FROZEN` or `APPROVED` when we introduce a review and approval process involving multiple users later.
 
 ### Core functionality
 
-The Study Registry Service can be accessed through a REST API to submit and query DAM, PAM, EM, and lookup values (ResourceType entries). It also supports updates to DAM and lookup values. The REST API is described below.
+The Registry Service can be accessed through a REST API to submit and query DAM, PAM, EM, and lookup values (ResourceType entries). It also supports updates to DAM and lookup values. The REST API is described below.
 
-For now, the accession numbers should be created in the same way as before, assuming that the existing accessions have been imported into the database already, so that no duplicate accessions will be created.
+A newly submitted study will always be created with the status `DRAFT`.
 
-A newly submitted study shall always be created with the status `PENDING`.
+The service has several endpoints for submitting all data belonging to a study. Any endpoint shall validate the received data immediately and reject it in case of a validation. Particularly, it should not be possible to submit invalid EM.
 
-When the status is updated with the `PATCH /studies` endpoint, or when the `/rpc/publish/{id}` endpoint is called, the service should validate the submission as described below. If validation fails, the status update is rejected and the submission status remains unchanged.
+When any such data has been successfully modified, the service shall check which study is affected by the change. These can be multiple if e.g. the name of a DAC is changed. For all of these studies which have corresponding EM, a new AnnotatedEMPack shall be create and published for consumption by the EM transformation service (EMTS). This will update these studies in the data portal.
 
-When the `/rpc/publish/{id}` endpoint is called and the submission has been successfully validated, the service creates new accession numbers for all resources contained in the EM and stores them in the database as Accession, AltAccession, and EmAccessionMap. If the study was already published before, accessions for resources removed from the submission are deleted.
+The service also provides endpoints with functionality that helps creating research data uploading boxes for uploading the research data files belonging to a study and mapping these files to corresponding entries in the submitted EM.
 
-The service will then create an AnnotatedEMPack and publish it as an event if the exact same AnnotatedEMPack has not been published before, as described further below.
+### Accessions (PIDs)
 
-The service also supports mapping uploaded files to their experimental metadata entries. See the `POST /file-ids` endpoint below.
+The entire service and client stack must be agnostic regarding the structure of accessions and be able to process arbitrary strings.
 
-### Validation
+The previously issued accessions (GHGA[A-Z][0-9]{14}) will be kept for already accepted studies, either remaining as their primary accessions or as special AltAccessions of type `GHGA_LEGACY` - this still needs to be decided.
 
-On ingress, submissions must be validated and rejected if there are any validation errors. Validation happens on several levels:
-
-- ingested DAM and PAM (e.g., study or dataset) are validated as DTOs using Pydantic
-- the submission must be complete (particularly, it must have a Publication and ExperimentalMetadata)
-- all referenced resources in the ingested DAM and PAM must exist and not be deprecated
-- ingested EM is validated by a separate EM validation service
-
-In this epic, we assume that the EM validation service exists and provides a simple REST API for validating EM against a given EMIM (currently we only have one). The exact API for the EM validation service will be defined in a future epic.
+ Newly accepted studies as well as future revisions of those early studies will follow the new schema.
+ 
+ TBD: This section shall be updated when we decided the exact schema (handling of version numbers, global uniqueness of metadata identifiers for one study etc.)
 
 ### Accession registry
 
-The first implementation of the Study Registry Service shall also contain an initial implementation of an accession registry. Later, this can be outsourced to a separate, dedicated service.
+The first implementation of the Registry Service shall also contain an initial implementation of an accession registry. Later, this can be outsourced to a separate, dedicated service.
 
 Resources archived in GHGA are immutable and should get accession numbers that are globally unique, persistent, and long-term resolvable. To emphasize these qualities, we also call these accession numbers persistent identifiers (PIDs). A PID must always resolve to the exact same state of a resource.
 
@@ -369,11 +375,15 @@ The accession store shall also contain a mapping from file accessions to interna
 
 ### Authorization
 
-With the introduction of study-centric metadata processing, we also introduce authorization for metadata. Instead of assuming all metadata is public, we now require access grants for metadata, similarly to the access grants for downloading datasets and uploading files to research data upload boxes.
+With the introduction of study-centric metadata processing, we also introduce authorization for metadata. Instead of assuming all metadata is public, we now require access grants for metadata, similarly to the access grants for downloading datasets and uploading files to research data upload boxes. Only data stewards will be able to view all metadata, independently of any existing grants.
 
-In the first implementation, the authorization will not yet be managed by actual grants via the claims repository, but handled via the `users` field of the Study instances. The field should store the IDs of all users who are allowed to access the study and its corresponding metadata. This field can also be set to `None`, indicating that the metadata is publicly accessible.
+These metadata access grants will be managed by the claims repository service (CRS), just like the existing access grants for download and upload.
 
-If study submissions contain non-public metadata, this metadata must be provided as files contained in a dataset that needs to be requested like other datasets.
+If in the upload process, other users than the supporting data steward should also be able to review uploaded studies before archival, these need to be explicitly granted access. When the study is archived, it can be made accessible to more individual users or can be made fully public. When a study is made public, the CRS will automatically removed all existing individual grants for the study.
+
+If some parts of a study with public metadata shall not be made public, these parts must be provided as files contained in a dataset that needs to be requested like other datasets, and not be provided along with the other metadata.
+
+Since this service does not provide a public interface for security reasons, the GHGA registry service provides endpoints that allow management of the metadata access grants, acting as a proxy to the CRS.
 
 ## User Journeys
 
@@ -385,22 +395,18 @@ Typical user journey for a data steward creating a new study:
 - submits a new study type via `POST /resource-types` if needed
 - submits the study via `POST /studies`
 - submits the experimental metadata via `POST /metadata`
-- submits the publication via `POST /publications`
+- optionally, submits the publication via `POST /publications`
 - submits a new data access committee via `POST /dacs` if needed
 - submits a new data access policy via `POST /daps` if needed
 - submits a new dataset type via `POST /resource-types` if needed
-- submits one or more datasets via `POST /datasets`
-- publishes the study via `POST /rpc/publish/{id}`
-- verifies that the preview looks good
-- uploads the corresponding files
-  (Sarcastic Fringehead and Archaeopteryx epics):
-  - creates a Research Data Upload Box for the study
-  - uploads all corresponding files using the connector
-  - fetches filenames with the `GET /filenames` endpoint
-  - maps the EM filenames to the uploaded filenames
-  - UOS sends the mapping to the `POST /file-ids` endpoint
-- data steward sets status to `PERSISTED` via `PATCH /studies`
-- publishes the study via `POST /rpc/publish/{id}`
+- optionally, submits one or more datasets via `POST /datasets`
+- verifies that the preview looks good in the data portal
+- creates a Research Data Upload Box for the study
+- uploads all corresponding files using the connector
+- fetches filenames with the `GET /filenames` endpoint
+- maps the EM filenames to the uploaded filenames
+- sends the mapping to the `POST /file-ids` endpoint
+- data steward sets status to `ARCHIVED` via `PATCH /studies`
 
 ## API Definitions
 
@@ -421,7 +427,7 @@ To support migration of existing dataset-centric metadata that has already been 
 
 The PID will be automatically created.
 
-After this request, the new Study will have the status `PENDING` and the `users` list should contain only the user who submitted the study.
+After this request, the new Study will have the status `DRAFT`.
 
 ##### `GET /studies`
 
@@ -434,36 +440,37 @@ After this request, the new Study will have the status `PENDING` and the `users`
 - Response Body: `list[Study]`
 - Returns: 200 or error code
 
-Only returns studies that are either public or accessible to the user (i.e. the user must be a data steward, or access must have been granted to the user).
+If not requested by a data steward, only returns studies that are either public or accessible to the user.
 
-The user related fields should only be returned if the request is made by a data steward.
+The response also returns the computed fields. The user related fields should only be returned if the request is made by a data steward.
 
 ##### `GET /studies/{id}`
 
 - Auth: internal auth token (optional)
 - Response Body: `Study`
-- Returns: 200 or error code
+- Returns: 200 or error code (particularly, 403 or 404)
 
-If the study is not public, an auth token is required. If the user is neither a data steward nor granted access to the study, the service returns 403.
+If not requested by a data steward, only returns studies that are either public or accessible to the user.
 
-The user related fields should only be returned if the request is made by a data steward.
+The response also returns the computed fields. The user related fields should only be returned if the request is made by a data steward.
 
 ##### `PATCH /studies/{id}`
 
 - Auth: internal auth token with data steward role
-- Request Body: new `status` and `users`
-- Returns: 204 or error code
+- Request Body: partial update of Study fields
+- Response Body: `Study`
+- Returns: 200 or error code
 
-The `status` can only be changed from `PENDING` to `PERSISTED`; otherwise, the service returns 409. The `users` field can only be set to `None` when the status is `PERSISTED`.
+The `status` can only be changed from `DRAFT` to `ARCHIVED`; otherwise, the service returns 409.
 
-When the status is changed, the service also validates the study, similarly to the `/rpc/publish/{id}` endpoint, and returns 409 if validation fails without changing the status.
+The response also returns the computed fields. The user related fields should only be returned if the request is made by a data steward.
 
 ##### `DELETE /studies/{id}`
 
 - Auth: internal auth token with data steward role
 - Returns: 200 or error code
 
-The study must have the status `PENDING`; otherwise, the service returns 409.
+The study must have the status `DRAFT`; otherwise, the service returns 409.
 
 Also deletes the corresponding experimental metadata, publications, and datasets, as well as all corresponding accessions.
 
@@ -472,20 +479,24 @@ Also deletes the corresponding experimental metadata, publications, and datasets
 ##### `POST /metadata`
 
 - Auth: internal auth token with data steward role
-- Request Body: `ExperimentalMetadata` (without `submitted`)
+- Request Body: `ExperimentalMetadata` (only `metadata` and `model`)
 - Returns: 204 or error code
 
-Upserts the corresponding ExperimentalMetadata instance.
+Validates the submitted metadata and upserts the corresponding ExperimentalMetadata instance. If the validation fails, returns error code `422`.
 
-The corresponding study must have the status `PENDING`; otherwise, the service returns 409.
+The corresponding study must have the status `DRAFT`; otherwise, the service returns 409.
+
+For validating the passed metadata, the RS uses the schema corresponding to the provided model name. To this end, the RS can either request the schema from the EMTS and validate the metadata itself or ask the EMTS to validate the metadata using a synchronous query.
 
 ##### `GET /metadata/{id}`
 
 - Auth: internal auth token with data steward role
 - Response Body: `ExperimentalMetadata`
-- Returns: 200 or error code
+- Returns: 200 or error code (particularly, 403 or 404)
 
 The `id` must be the PID of the corresponding study.
+
+This endpoint can only be accessed by data stewards, normal users can only fetch the transformed metadata.
 
 Returns the corresponding submitted, unprocessed ExperimentalMetadata instance.
 
@@ -496,7 +507,7 @@ Returns the corresponding submitted, unprocessed ExperimentalMetadata instance.
 
 The `id` must be the PID of the corresponding study.
 
-The study must have the status `PENDING`; otherwise, the service returns 409.
+The study must have the status `DRAFT`; otherwise, the service returns 409.
 
 #### Publication API
 
@@ -511,7 +522,7 @@ Upserts the corresponding Publication instance.
 
 The PID will be automatically created.
 
-The corresponding study must have the status `PENDING`; otherwise, the service returns 409.
+The corresponding study must have the status `DRAFT`; otherwise, the service returns 409.
 
 ##### `GET /publications`
 
@@ -523,22 +534,22 @@ The corresponding study must have the status `PENDING`; otherwise, the service r
 - Response Body: `list[Publication]`
 - Returns: 200 or error code
 
-Only returns publications whose studies are either public or accessible to the user (i.e. the user must be a data steward, or access must have been granted to the user).
+If not requested by a data steward, only returns publications for studies that are either public or accessible to the user.
 
 ##### `GET /publications/{id}`
 
 - Auth: internal auth token (optional)
 - Response Body: `Publication`
-- Returns: 200 or error code
+- Returns: 200 or error code (particularly, 403 or 404)
 
-If the corresponding study is not public, an auth token is required. If the user is neither a data steward nor granted access to the study, the service returns 403.
+If not requested by a data steward, only returns publications for studies that are either public or accessible to the user.
 
 ##### `DELETE /publications/{id}`
 
 - Auth: internal auth token with data steward role
 - Returns: 200 or error code
 
-The corresponding study must have the status `PENDING`; otherwise, the service returns 409.
+The corresponding study must have the status `DRAFT`; otherwise, the service returns 409.
 
 Also deletes the accession number for the publication.
 
@@ -641,7 +652,7 @@ Upserts the corresponding Dataset instance.
 
 The PID will be automatically created.
 
-The corresponding study must have the status `PENDING`; otherwise, the service returns 409.
+The corresponding study must have the status `DRAFT`; otherwise, the service returns 409.
 
 ##### `GET /datasets`
 
@@ -654,15 +665,15 @@ The corresponding study must have the status `PENDING`; otherwise, the service r
 - Response Body: `list[Dataset]`
 - Returns: 200 or error code
 
-Only returns datasets whose studies are either public or accessible to the user (i.e. the user must be a data steward, or access must have been granted to the user).
+If not requested by a data steward, only returns datasets for studies that are either public or accessible to the user.
 
 ##### `GET /datasets/{id}`
 
 - Auth: internal auth token (optional)
 - Response Body: `Dataset`
-- Returns: 200 or error code
+- Returns: 200 or error code (particularly, 403 or 404)
 
-If the corresponding study is not public, an auth token is required. If the user is neither a data steward nor granted access to the study, the service returns 403.
+If not requested by a data steward, only returns datasets for studies that are either public or accessible to the user.
 
 ##### `PATCH /datasets/{id}`
 
@@ -677,7 +688,7 @@ Changing the `dap_id` will be allowed even when the study is already in status `
 - Auth: internal auth token with data steward role
 - Returns: 200 or error code
 
-The corresponding study must have the status `PENDING`; otherwise, the service returns 409.
+The corresponding study must have the status `DRAFT`; otherwise, the service returns 409.
 
 Also deletes the accession number for the dataset.
 
@@ -759,32 +770,21 @@ Returns a mapping from all file accessions for the study with the given PID to t
 
 This endpoint is called by the frontend file mapping tool at the end of the upload process.
 
+#### File Upload API
+
 ##### `POST /file-ids/{id}`
 
-- Auth: work order token for accession to file id mapping from UOS
+- Auth: internal auth token with data steward role
 - Request Body: map from file accessions to internal file IDs
 - Returns: 204 or error code
 
-This endpoint may only be called by the UOS via a work order token, on behalf of a data steward. The UOS needs to verify that the user who made the mapping request is a data steward who manages a certain research data upload box and that all file ids in the mapping belong to that box. The user ID of the data steward should also be passed in the WOT so that it can be included in an audit log.
+Ingests a filename mapping for the Research Data Upload Box with the given id.
 
-The study registry service should check whether the specified file accessions exist and belong to the study with the specified PID.
+The SR must check that all file ids in the mapping belong to the box in question and respond with an error code 409 otherwise.
 
 The service should then upsert an `AltAccession` instance with type `FILE_ID` for all entries in the passed map, where `pid` is the key and `id` is the value in the map.
 
 The service should then republish the passed map for consumption by DINS and WPS.
-
-### RPC Style/Synchronous
-
-#### Study Publication
-
-##### `POST /rpc/publish/{id}`
-
-- Auth: internal auth token with data steward role
-- Returns: 204 or error code
-
-Triggers publication of the study with the specified PID after verifying that the required data is complete and valid. Otherwise, the service returns 409.
-
-This endpoint may be called before the study is persisted to pass the submitted study data to downstream services and make it visible in the data portal for preview.
 
 ### Payload Schemas for Events
 
@@ -801,7 +801,7 @@ The published AEM events shall have the following schema:
 
 The payload should use slightly modified classes with embeddings instead of references.
 
-The service also republishes filename mappings received from the UOS via the REST API. The payload should be the exact same mapping; the study PID is not needed.
+The service also republishes filename mappings received from the UOS via the REST API. The payload should be the exact same mapping; study PID and box id are not needed.
 
 ## Human Resource/Time Estimation
 
