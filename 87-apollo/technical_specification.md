@@ -24,6 +24,8 @@ All units of data archived in GHGA (as files or structured metadata objects) tha
 
 Another change that needs to be considered in the implementation of the RS is the new authorization concept that assumes all metadata is non-public by default. Public access to metadata or access restricted to certain users needs to be explicitly granted on the study level.
 
+Finally, the GHGA service registry should also manage the upload of the files that are referenced in the EM. To this end, it includes the functionality that had been implemented in the "Upload Orchestration Service" (UOS) and replaces it fully.
+
 ### Included/Required
 
 - First implementation of the GHGA Registry Service
@@ -250,6 +252,25 @@ This entity model has been separated from the Study entity model because the acc
 
 Note: In the new PID schema, accessions are derived from the study ID and the original submission identifier. This means, in theory, we would not need to store these mappings. However, keeping them allows us to support accession numbers that cannot be directly derived, and to resolve accessions using the old PID schema if we choose not to generate new accession numbers for existing data.
 
+#### ResearchDateAUploadBox
+
+The ResearchDataUploadBox entity stores Research Data Upload Box (RDUB) objects that reference corresponding raw FileUploadBoxes (FUB) provided by the download controller service (DCS).
+
+Attributes:
+
+- `id: UUID` - internal ID of the RDUB
+- `version` int - counter indicating the RDUB version
+- `state: UploadBoxState` - current state of the RDUB
+- `title: str` - shhort human readable name for the RDUB
+- `description: str` - describes the RDUB in more detail
+- `changed: Date` - when the RDUB was last changed
+- `changed_by: UUID` - user who performed the latest change
+- `file_upload_box_id` - ID of the corresponding FUB in the DCS
+- `file_upload_box_version` - counter indicating FUB version
+- `file_upload_box_state: UploadBoxState` - current state of the file upload box
+- `file_count: int` - number of files in the box
+- `size: int` - the total size of all files in the box
+- `storage_alias: str` - object storage alias to use for uploads
 
 ### Enums
 
@@ -327,6 +348,14 @@ The StudyStatus enum describes all possible states of a Study:
 - `ARCHIVED` (study has been archived and has become immutable)
 
 We might add more status values like `FROZEN` or `APPROVED` when we introduce a review and approval process involving multiple users later.
+
+#### UploadBoxState
+
+The UploadBoxState enum lists all possible states that a RDUB or FUB can have. 
+
+- `OPEN`
+- `LOCKED`
+- `ARCHIVED`
 
 ### Core functionality
 
@@ -407,6 +436,7 @@ Typical user journey for a data steward creating a new study:
 - maps the EM filenames to the uploaded filenames
 - sends the mapping to the `POST /file-ids` endpoint
 - data steward sets status to `ARCHIVED` via `PATCH /studies`
+- data stewards adds public grant via `POST /access...`
 
 ## API Definitions
 
@@ -758,9 +788,103 @@ Returns the AltAccession instance with the given alternative accession number an
 
 The type `FILE_ID` is not allowed here to avoid exposing internal numbers.
 
-#### Filenames and File IDs
+#### Access Grants
 
-##### `GET /filenames/{id}`
+The following endpoints are for managing metadata access grants.
+
+##### `POST /study-grants`
+
+- Auth: internal auth token with data steward role
+- Request body:
+  - `study_id: str`
+  - `user_ids: list[UUID] | None`
+- Returns: 204 or error code
+
+Creates a metadata access grant for the given Study PID and the given list of users. If the list of users is empty, all existing grants for the study will be removed and only data stewards will be able to view the study and its metadata. If it is `None`, then a grant will be created that allows any user to view the study and its metadata, and all existing user-related grants for the study will be removed. Otherwise, grants for all the specified users will be created, and all other grants for this study, including public grants, will be removed.
+
+Note that no expiration date needs to be passed, since these grants never expire. Also, these grants are not bound to an IVA.
+
+The SR must use the CRS to store the access grants to the claims repository.
+
+##### `GET /study-grants`
+
+- Auth: internal auth token with data steward role
+- Query parameters:
+  - `study_id?: str`
+  - `user_id?: UUID`
+- Response Body: object with study PIDs as key and a list of user IDs or `None` as value
+- Returns: 200 or error code
+
+Returns a list of all metadata access grants, filtered according to the specified query parameters. If multiple user IDs are specified, only grants for any of these users will be returned. If `None` is specified as a user ID, then public grants and grants for all the other specified users are returned. If no user ID is passed, all public grants and user-related grants will be returned (these can be many).
+
+The response will return an object whose entries correspond to the existing metadata access grants. The keys refer to the study PIDs, and the values will be either `None` if there is a public grant, or a non-empty list of the IDs of all users who are allowed to view the study and its metadata.
+
+The SR must use the CRS to fetch the access grants to the claims repository.
+
+##### `DELETE /study-grants/{study_id}`
+
+- Auth: internal auth token with data steward role
+- Returns: 200 or error code (particularly, 404 if no such study)
+
+Deletes all access grants for the Study with the given PID.
+
+To delete an access grant for individual users, use the `GET` endpoint with the corresponding study PID, remove the users from the returned list, and submit it with the same study PID via the `POST` endpoint.
+
+The SR must use the CRS to remove the access grants to the claims repository.
+
+##### `POST /upload-grants`
+
+- Auth: internal auth token with data steward role
+- Request body:
+  - `box_id: UUID`
+  - `user_id: int` 
+  - `iva_id: UUID`
+  - `valid_from: Date`
+  - `valid_until: Date`
+- Response body:
+  - `grant_id: UUID`
+- Returns: 201 or error code
+
+Creates an upload grant for the given RDUB to the given user with the given IVA. The validity period must also be passed in the request body. If successful, returns the ID of the created upload grant.
+
+##### `GET /upload-grants`
+
+- Auth: internal auth token with data steward role
+- Query parameters:
+  - `box_id?: UUID`
+  - `user_id?: UUID`
+  - `iva_id?: UUID`
+  - `valid?: bool`
+- Response body: `list[GrantWithBoxInfo]`
+- Returns: 200 or error code
+
+Endpoint to get the list of all upload access grants with additional information, filtered by the specified query parameters. Results are sorted by validity, box ID, user ID, IVA ID, and grant ID.
+
+The returned `GrantWithBoxInfo` objects contain the following fields:
+
+- `box_id: UUID`
+- `user_id: UUID4`
+- `iva_id: UUID`
+- `valid_from: Date`
+- `valid_to: Date`
+- `user_name: str`
+- `user_email: EmailStr`
+- `user_title: str | None`
+- `box_title: str`
+- `box_description: str`
+
+##### `DELETE /upload-grants/{grant_id}`
+
+- Auth: internal auth token with data steward role
+- Returns: 204 or error code (particularly, 404 if no such grant exists)
+
+Revokes the upload grant with the given ID.
+
+#### File Upload API
+
+The following endpoints are for managing file upload.
+
+##### `GET /filenames/{study_id}`
 
 - Auth: internal auth token with data steward role
 - Response Body: map from file accessions to objects with `name` and `alias` properties
@@ -770,17 +894,85 @@ Returns a mapping from all file accessions for the study with the given PID to t
 
 This endpoint is called by the frontend file mapping tool at the end of the upload process.
 
-#### File Upload API
-
-##### `POST /file-ids/{id}`
+##### `POST /upload-boxes`
 
 - Auth: internal auth token with data steward role
-- Request Body: map from file accessions to internal file IDs
+- Request Body:
+  - `title: str`
+  - `description: str`
+  - `storage_alias: str`
+- Response Body:
+  -  `box_id: UUID`
+- Returns: 200 or error code
+
+This endpoint is used to create a new RDUB. If successful, returns the ID of the RDUB.
+
+##### `GET /upload-boxes`
+
+- Auth: internal auth token
+- Request params:
+  - `skip?`: int
+  - `limit?`: int
+  - `state?`: UploadBoxState
+- Response body:
+    - `count: int`
+    - `boxes: list[ResearchDataUploadBox]`
+- Returns: 200 or error code
+
+Fetches a list of RDUBs. Results are sorted first by locked status (unlocked followed by locked), then by most recently changed, then by box ID.
+
+The query parameters can be used to paginate the results or filter for a given state. The total number of unpaginated results is returned in the `count` field.
+
+Data stewards have access to all boxes, while regular users may only access boxes to which they have been granted upload access.
+
+##### `GET /upload-boxes/{box_id}`
+
+- Auth: internal auth token
+- Response body: `ResearchDataUploadBox`
+- Returns: 200 or error code (particularly, 403 or 404)
+
+Returns the details of an existing RDUB.
+
+Data stewards have access to all boxes, while regular users may only access boxes to which they have been granted upload access.
+
+##### `PATCH /upload-boxes/{box_id}`
+
+- Auth: internal auth token with data steward role
+- Request Body:
+  - `version: int`
+  - `title?: str`
+  - `description?: str`
+  - `state: UploadBoxState`
+- Returns: 204 or error code
+
+This endpoint is used to update the modifiable details for a RDUB, including the description, title, and state. When modifying the state, users are only allowed to move the state from OPEN to LOCKED, and all other changes are restricted to data stewards.
+
+Once archived, the box may no longer be modified, and files in the box will be moved to permanent storage. If any files in the box have yet to be re-encrypted, if the box is still open, or if there are any files that lack an accession number, archival is denied.
+
+##### `GET /upload-boxes/{box_id}/uploads`
+
+- Auth: internal auth token
+- Response body: `list[FileUploadWithAccession]`
+- Returns: 200 or error code (particularly, 403 or 404)
+
+List the details of all files uploads for the specified RDUB.
+
+The `FileUploadWithAccession` contains all the fields from the shared GHGA event schema `FileUploadWithAccession` plus an optional file accession (for files that have been already mapped).
+
+Data stewards have access to all boxes, while regular users may only access boxes to which they have been granted upload access.
+
+##### `POST /upload-boxes/{box_id}/file-ids`
+
+- Auth: internal auth token with data steward role
+- Request Body:
+  - `version: int` - the current RDUB version
+  - `mapping: dict[str, UUID]` - mapping from file accessions to internal file IDs
+  - `study_id`: - the ID of the corresponding study
 - Returns: 204 or error code
 
 Ingests a filename mapping for the Research Data Upload Box with the given id.
 
-The SR must check that all file ids in the mapping belong to the box in question and respond with an error code 409 otherwise.
+As a safety measure, the SR must verify that all accessions in the mapping belong to the study with the specified PID and that all file IDs in the mapping belong to the box with the given ID, and respond with an error code 409 otherwise.
 
 The service should then upsert an `AltAccession` instance with type `FILE_ID` for all entries in the passed map, where `pid` is the key and `id` is the value in the map.
 
@@ -801,7 +993,7 @@ The published AEM events shall have the following schema:
 
 The payload should use slightly modified classes with embeddings instead of references.
 
-The service also republishes filename mappings received from the UOS via the REST API. The payload should be the exact same mapping; study PID and box id are not needed.
+The service also republishes filename mappings from accessions to internal file IDs via the REST API. The payload should be the exact same mapping; study PID and box id are not needed.
 
 ## Human Resource/Time Estimation
 
