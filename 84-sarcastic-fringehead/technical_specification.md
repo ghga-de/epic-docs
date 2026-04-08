@@ -215,9 +215,9 @@ class FileAccessionMap(BaseModel):
 - Set the `FileInternallyRegistered` schema to match what is defined above
 - Replace `FileUploadValidationSuccess` with `InterrogationSuccess` as defined above
 - Replace `FileUploadValidationFailure` with `InterrogationFailure` as defined above
-- ~~Rename `_FileInterrogationsConfig` to `_InterrogationEventsConfig`~~ *(not done — class retains its original name)*
-- ~~Rename `FileInterrogationSuccessEventsConfig` to `InterrogationSuccessEventsConfig`~~ *(not done — class retains its original name)*
-- ~~Rename `FileInterrogationFailureEventsConfig` to `InterrogationFailureEventsConfig`~~ *(not done — class retains its original name)*
+- Rename `_FileInterrogationsConfig` to `_InterrogationEventsConfig` *(not done — class retains its original name)*
+- Rename `FileInterrogationSuccessEventsConfig` to `InterrogationSuccessEventsConfig` *(not done — class retains its original name)*
+- Rename `FileInterrogationFailureEventsConfig` to `InterrogationFailureEventsConfig` *(not done — class retains its original name)*
 - Remove the `FileUploadReport` schema
 - Remove the `FileUploadReportEventsConfig` stateless config class
 - Rename `NonStagedFileRequested.s3_endpoint_alias` to `storage_alias`
@@ -287,19 +287,19 @@ The UCS needs the following config changes:
 - Add config that maps Data Hub string to inbox storage alias
 
 #### Work to be performed for the UCS
-- [x] Get schema updates from ghga-event-schemas
-- [x] Implement new endpoints
-- [ ] Exclude `secret_id` and checksum fields from `FileUpload` objects returned by `GET /boxes/{box_id}/uploads`
-- [x] Remove existing subscription to `FileUploadReport` events
-- [x] Add event subscriber for `InterrogationSuccess` and `InterrogationFailure` events
-- [x] Add core behavior to handle `InterrogationSuccess` and `InterrogationFailure`
-- [x] Add event subscriber for `FileInternallyRegistered` events
-- [x] Add core behavior to handle `FileInternallyRegistered` events
-- [x] Add event subscriber and core behavior for `FileDeletionRequested` events
-- [x] Change existing deletion behavior to update `FileUpload.state` to `cancelled` instead of actually deleting content
-- [x] Modify the logic for the "change box" endpoint to work with state field instead of booleans
-- [x] Assign `storage_alias` and `bucket_id` to new file uploads
-- [x] Validate `storage_alias` when boxes are created by Data Stewards
+- Get schema updates from ghga-event-schemas
+- Implement new endpoints
+- Exclude `secret_id` and checksum fields from `FileUpload` objects returned by `GET /boxes/{box_id}/uploads`
+- Remove existing subscription to `FileUploadReport` events
+- Add event subscriber for `InterrogationSuccess` and `InterrogationFailure` events
+- Add core behavior to handle `InterrogationSuccess` and `InterrogationFailure`
+- Add event subscriber for `FileInternallyRegistered` events
+- Add core behavior to handle `FileInternallyRegistered` events
+- Add event subscriber and core behavior for `FileDeletionRequested` events
+- Change existing deletion behavior to update `FileUpload.state` to `cancelled` instead of actually deleting content
+- Modify the logic for the "change box" endpoint to work with state field instead of booleans
+- Assign `storage_alias` and `bucket_id` to new file uploads
+- Validate `storage_alias` when boxes are created by Data Stewards
 
 ---
 
@@ -335,17 +335,17 @@ The UOS gets updates to the following existing endpoints:
 - Mapping for Data Hub to inbox storage alias
 
 #### Work to be performed for the UOS
-- [ ] Get schema updates from ghga-event-schemas
-- [ ] Add the new API endpoint described above
-- [ ] Add the FileAccessionMap definition somewhere in the UOS (not in a library)
-- [ ] Rename final box state to `archived` instead of `closed`
-- [ ] Add a new `"archive"` option to the `ChangeFileBoxWorkOrder` for the work type literal that represents final, permanent sealing of `FileUploadBox`
-- [ ] Add an event publisher for `FileAccessionMap` events
-- [ ] Add a DAO for file accession data
-- [ ] Add an outbound UCS call in the `FileBoxClient` with the same structure as `lock_file_upload_box()` and `unlock_file_upload_box()`, called `archive_file_upload_box()`
-- [ ] Call `FileBoxClient.archive_file_upload_box()` from the UOS core when moving a `ResearchDataUploadBox` to `archived` state (formerly labeled `closed`).
-- [ ] Modify the "update box" calls to the UCS so they specify state instead of the locked/archived booleans
-- [ ] Validate `storage_alias` when Data Stewards create a new `ResearchDataUploadBox`
+- Get schema updates from ghga-event-schemas
+- Add the new API endpoint described above
+- Add the FileAccessionMap definition somewhere in the UOS (not in a library)
+- Rename final box state to `archived` instead of `closed`
+- Add a new `"archive"` option to the `ChangeFileBoxWorkOrder` for the work type literal that represents final, permanent sealing of `FileUploadBox`
+- Add an event publisher for `FileAccessionMap` events
+- Add a DAO for file accession data
+- Add an outbound UCS call in the `FileBoxClient` with the same structure as `lock_file_upload_box()` and `unlock_file_upload_box()`, called `archive_file_upload_box()`
+- Call `FileBoxClient.archive_file_upload_box()` from the UOS core when moving a `ResearchDataUploadBox` to `archived` state (formerly labeled `closed`).
+- Modify the "update box" calls to the UCS so they specify state instead of the locked/archived booleans
+- Validate `storage_alias` when Data Stewards create a new `ResearchDataUploadBox`
 
 ---
 
@@ -361,7 +361,7 @@ The WKVS would get the following new endpoint:
 - Returns `200 OK` and a mapping of storage alias to public key
 
 #### Work to be performed for the WKVS
-- [ ] Provide a way to retrieve Crypt4GH public keys for Data Hubs. This can be a dictionary where the keys are storage aliases and the values are the public keys.
+- Provide a way to retrieve Crypt4GH public keys for Data Hubs. This can be a dictionary where the keys are storage aliases and the values are the public keys.
 
 ---
 
@@ -375,9 +375,9 @@ Per-part encryption process needs to be updated to the following:
 4. Compare the decrypted checksums to make sure they're the same at each step in the process.
 
 #### Work to be performed for the GHGA Connector
-- [ ] Fetch and use Data Hub public key for file encryption
-- [ ] Submit file part size
-- [ ] Make sure we decrypt encrypted parts again and calculate a second, confirmatory checksum over the unencrypted content.
+- Fetch and use Data Hub public key for file encryption
+- Submit file part size
+- Make sure we decrypt encrypted parts again and calculate a second, confirmatory checksum over the unencrypted content.
 
 ---
 
@@ -397,7 +397,7 @@ The `POST /secrets` endpoint will be updated to work as described here:
 - EKSS returns a `201 CREATED` response containing the Vault ID of the deposited secret.
 
 #### Work to be performed for the EKSS
-- [ ] Rewrite `post_encryption_secret()` to work as described above
+- Rewrite `post_encryption_secret()` to work as described above
 
 ---
 
@@ -486,25 +486,25 @@ The `ingestedFiles` collection, which contains unassociated accessions, should b
 Finally, FIS data migration should be moved to the init container style. Instead of executing `run_db_migrations()` as part of every entrypoint, the migrations should be run as their own command. 
 
 #### Work to be performed for the FIS
-- [x] Ensure DLQ is enabled
-- [x] Add local definition for `FileUnderInterrogation`
-- [ ] Swap persistent publisher in favor of outbox publisher for `FileUpload` events.
+- Ensure DLQ is enabled
+- Add local definition for `FileUnderInterrogation`
+- Swap persistent publisher in favor of outbox publisher for `FileUpload` events.
   - again, these are the historical data, the old events previously published by FIS.
-- [x] Add outbox subscriber for `FileUpload` events
+- Add outbox subscriber for `FileUpload` events
   - These are the real, actually new uploads published by the UCS
-- [x] Add persistent publisher that compacts & stores `InterrogationSuccess` and `InterrogationFailure` events
-- [x] Add HTTP endpoints as [outlined above](#fis-http-api)
-- [ ] Write migrations and address existing persisted event data as [described above](#fis-migrations).
-- [x] Move migrations to own CLI command so they can be run as an init container
-  - [ ] Work with DevOps to get this configured in k8s
+- Add persistent publisher that compacts & stores `InterrogationSuccess` and `InterrogationFailure` events
+- Add HTTP endpoints as [outlined above](#fis-http-api)
+- Write migrations and address existing persisted event data as [described above](#fis-migrations).
+- Move migrations to own CLI command so they can be run as an init container
+  - Work with DevOps to get this configured in k8s
 
 ---
 
 ### DHFS:
-The DHFS is a new service that is operated by the Data Hubs for the purpose of performing file validation and re-encryption, and to keep file ingest in general as a federated operation. The DHFS operates two instances: a client instance, which performs the interrogation work and is always running; and a cleanup instance, which runs at some interval and deletes files from the `interrogation` bucket once they've been copied to permanent storage. One crucial thing to note here is that the DHFS is not connected to an event stream, and so has no direct knowledge of the information conveyed by the events in GHGA Central's event stream. The DHFS primarily interacts with FIS's REST API in order to get that information, which is limited to only what the DHFS needs to operate.
+The DHFS is a new service that is operated by the Data Hubs for the purpose of performing file validation and re-encryption, and to keep file ingest in general as a federated operation. The DHFS operates two instances: an `interrogate` instance, which performs the interrogation work and runs in a continuous polling loop; and a `cleanup` instance, which runs on demand (or on a schedule via an external orchestrator) and deletes files from the `interrogation` bucket once they've been copied to permanent storage. One crucial thing to note here is that the DHFS is not connected to an event stream, and so has no direct knowledge of the information conveyed by the events in GHGA Central's event stream. The DHFS primarily interacts with the GHGA Central API (operated by the FIS) in order to get that information, which is limited to only what the DHFS needs to operate.
 
 #### DHFS Interrogator (primary instance)
-It polls the FIS's HTTP API to get a list of `FileUploads` for files that have been recently uploaded to its `inbox` bucket. The DHFS decrypts each file and re-encrypts it using a new, individually created file secret before uploading it to the Data Hub's `interrogation` bucket. Along the way, it calculates the:
+It polls the GHGA Central API to get a list of `FileUploads` for files that have been recently uploaded to its `inbox` bucket. The DHFS decrypts each file and re-encrypts it using a new, individually created file secret before uploading it to the Data Hub's `interrogation` bucket. Along the way, it calculates the:
 - Cumulative SHA-256 checksum of the entire unencrypted file
   - > Used to verify that the decrypted file is identical to what was uploaded by the user
 - MD5 checksum of each individual, re-encrypted file part
@@ -517,40 +517,60 @@ If a checksum discrepancy is found, the DHFS rejects the upload and posts an `In
 
 #### Interrogation Process in List Format
 - [Per File]
-  - Reads the first file part to sift for the Crypt4GH envelope
-  - Decrypts the envelope using the configured private key (specific to the Data Hub)
-  - Obtains the original file secret for decryption
-  - Generates a new file secret for re-encryption
-  - Calculates the content starting position (offset) from the envelope length
+  - Verifies that the file exists in the inbox bucket before proceeding
+  - Derives the Crypt4GH envelope size (offset) from `FileUpload.encrypted_size` and `decrypted_size` (computed property on the `FileUpload` model)
+  - Fetches the Crypt4GH envelope via a byte-range download (bytes 0 through `offset`)
+  - Decrypts the envelope using the configured private key (specific to the Data Hub) to obtain the original file secret
+  - Generates a new file secret for re-encryption (32 random bytes)
   - Initiates a multipart upload with the Data Hub's `interrogation` bucket
   - Streams the object from the Data Hub's `inbox` bucket part-by-part using either `FileUpload.part_size` or an adjusted value that keeps both the part count under 10k and the part size evenly divisible by the cipher segment size for optimal processing.
-  - [Per File Part]
-    - Decrypts the part
+  - [Per Encrypted File Part]
+    - Downloads and decrypts the part using the original secret
     - Re-encrypts the part using the newly generated file secret
-    - Calculates the MD5 and SHA-256 checksums over the encrypted file part and appends each to their respective lists
-    - Decrypts the re-encrypted content again
-    - Updates the SHA-256 checksum over this re-decrypted content
-    - Uploads the re-encrypted part to the Data Hub's `interrogation` bucket
-  - Compares the unencrypted file's SHA-256 checksum against the one reported by the submitter during upload (found in `FileUpload.decrypted_sha256`), and the encrypted checksum against the one calculated by S3
-  - Sends an `InterrogationReport` to the FIS's HTTP API
-    - In the successful case, the `InterrogationReport` includes the new file encryption secret encrypted with the GHGA public key.
+    - Decrypts the re-encrypted content again (confirmatory decryption)
+    - Updates the cumulative SHA-256 checksum over the re-decrypted content
+    - Buffers the re-encrypted data; when the buffer reaches the adjusted part size:
+      - Calculates the MD5 and SHA-256 checksums over the buffered part and appends each to their respective lists
+      - Uploads the buffered part to the Data Hub's `interrogation` bucket
+  - Compares the unencrypted file's SHA-256 checksum against the one reported by the submitter during upload (found in `FileUpload.decrypted_sha256`); aborts the multipart upload if there is a mismatch
+  - Completes the multipart upload and verifies the S3 ETag matches the aggregate MD5 calculated from part checksums; removes the object from the interrogation bucket if there is a mismatch
+  - Sends an `InterrogationReport` to the GHGA Central API
+    - In the successful case, the `InterrogationReport` includes the new file encryption secret encrypted with the Central API's Crypt4GH public key.
 
 #### DHFS Cleanup Job (secondary instance)
-The secondary duty of the DHFS is to clean up files from the `interrogation` bucket. Files must be removed once they have been fully copied to the permanent bucket, as well as on occasions that files are deleted from their parent box. Neither the FIS, UCS, nor IFRS can perform this action because they don't have write access to the `interrogation` bucket. Each time this DHFS instance runs, it retrieves a list of all objects (files) currently in the `interrogation` bucket. Then the DHFS makes a single GET request to the FIS API's `POST /storages/{storage_alias}/uploads/can_remove` endpoint and supplies the file IDs in the request body. As stated in the FIS section, although this operation is a retrieval and would normally be a `GET` operation, we use `POST` because URL size could otherwise exceed several KB quite quickly. For authentication, the DHFS signs a JWT with its private key. In response, the DHFS expects to get a list containing the IDs of files which may be deleted from the interrogation bucket. The DHFS will then *delete* each listed file from the `interrogation` bucket.
+The secondary duty of the DHFS is to clean up files from the `interrogation` bucket. Files must be removed once they have been fully copied to the permanent bucket, as well as on occasions that files are deleted from their parent box. Neither the FIS, UCS, nor IFRS can perform this action because they don't have write access to the `interrogation` bucket. Each time this DHFS instance runs, it retrieves a list of all objects (files) currently in the `interrogation` bucket. Then the DHFS makes a single POST request to the GHGA Central API's `POST /storages/{storage_alias}/uploads/can_remove` endpoint and supplies the file IDs in the request body. As stated in the FIS section, although this operation is a retrieval and would normally be a `GET` operation, we use `POST` because URL size could otherwise exceed several KB quite quickly. For authentication, the DHFS signs a JWT with its private key. In response, the DHFS expects to get a list containing the IDs of files which may be deleted from the interrogation bucket. The DHFS will then *delete* each listed file from the `interrogation` bucket.
 
 #### DHFS Configuration
 The DHFS needs the following configuration:
-- LoggingConfig
-- OpenTelemetryConfig
-- S3ObjectStoragesConfig
-- central_api_crypt4gh_public_key
-  - Used to encrypt the file encryption secret
-- data_hub_crypt4gh_private_key_path
-  - Path to the Data Hub's crypt4gh private encryption key, used to decrypt files.
-- data_hub_signing_key
-  - This is the Data Hub's private key, which it uses to sign auth tokens sent to FIS
-- wkvs_api_url
-  - Used to contact WKVS to get the GHGA central public key (alternatively this could be directly configured as fis_public_key)
+- `LoggingConfig` (hexkit)
+- `S3Config` (hexkit) — S3 endpoint URL, access key ID, and secret access key
+- `central_api_url`
+  - The base URL of the GHGA Central API (FIS)
+- `central_api_crypt4gh_public_key`
+  - The Crypt4GH public key of the Central API, used to encrypt the new file encryption secret before including it in the interrogation report
+- `data_hub_crypt4gh_private_key_path`
+  - Path to the Data Hub's Crypt4GH private encryption key, used to decrypt the file envelope
+- `crypt4gh_private_key_passphrase` (optional)
+  - Passphrase to decrypt the private key file, required only if the key is itself encrypted
+- `data_hub_signing_key`
+  - The Data Hub's private JWK (EC/ES256), used to sign JWT auth tokens sent to the GHGA Central API
+- `storage_alias`
+  - An identifier for this Data Hub instance (e.g. `"HD"`, `"TUE"`, `"B"`), coordinated with GHGA Central
+- `interrogation_bucket_id` (default: `"interrogation"`)
+  - Name of the S3 bucket used to store re-encrypted files
+- `min_run_interval_seconds` (default: `60`)
+  - Minimum number of seconds to wait between interrogation polling cycles
+- `service_name` (default: `"dhfs"`)
+  - Short name for this service instance
+- HTTP client settings (`http_request_timeout_seconds`, caching capacity/TTL, retry count, and exponential backoff max)
+
+#### Work to be performed for the DHFS
+- Implement the `interrogate` CLI command with continuous polling loop support (`--forever` flag)
+- Implement the `cleanup` CLI command for one-shot interrogation bucket cleanup
+- Implement file interrogation core logic (envelope fetch, decrypt/re-encrypt/confirmatory-decrypt cycle, checksum calculation, multipart upload, report submission)
+- Implement the S3 client adapter (multipart upload initiation/completion/abort, byte-range downloads, presigned URL caching)
+- Implement the GHGA Central API client adapter (fetch new uploads, submit interrogation reports, query removable files)
+- JWT auth token generation (ES256) signed with the Data Hub's private JWK
 ---
 
 ### IFRS:
@@ -606,18 +626,18 @@ IFRS data migration should be moved to the init container style. Instead of exec
   - ghga-event-schemas -> `FileAccessionMappingEventsConfig` (topic and type for `FileAccessionMapping` events from UOS)
 
 #### Work to be performed for the IFRS
-- [ ] Add local definition for `PendingFileUpload`
-- [ ] Add event subscriber for `FileAccessionMapping` events
-- [ ] Add DAO for `PendingFileUpload` and `FileAccessionMapping` data
-- [ ] Make archival wait for an accession before proceeding (currently IFRS archives immediately upon receiving `awaiting_archival` without checking for an accession)
-- [x] Upon receiving a `FileUpload` with the state `awaiting_archival`, copy the file from the `interrogation` bucket to the IFRS's permanent bucket
-- [ ] Use the `FileUpload.id` as the permanent-bucket object ID instead of generating a new UUID (to keep the file ID consistent across all services)
-- [x] Get the updated `ghga-event-schemas` version and adapt IFRS for changes to `FileInternallyRegistered`
-- [x] Migrate existing data in the `file_metadata` collection
-- [x] Create new collection to preserve existing file accession-to-file ID associations
-- [x] Migrate existing data in the `ifrsPersistedEvents` collection
-- [x] Move migrations to own CLI command so they can be run as an init container
-  - [ ] Work with DevOps to get this configured in k8s
+- Add local definition for `PendingFileUpload`
+- Add event subscriber for `FileAccessionMapping` events
+- Add DAO for `PendingFileUpload` and `FileAccessionMapping` data
+- Make archival wait for an accession before proceeding (currently IFRS archives immediately upon receiving `awaiting_archival` without checking for an accession)
+- Upon receiving a `FileUpload` with the state `awaiting_archival`, copy the file from the `interrogation` bucket to the IFRS's permanent bucket
+- Use the `FileUpload.id` as the permanent-bucket object ID instead of generating a new UUID (to keep the file ID consistent across all services)
+- Get the updated `ghga-event-schemas` version and adapt IFRS for changes to `FileInternallyRegistered`
+- Migrate existing data in the `file_metadata` collection
+- Create new collection to preserve existing file accession-to-file ID associations
+- Migrate existing data in the `ifrsPersistedEvents` collection
+- Move migrations to own CLI command so they can be run as an init container
+  - Work with DevOps to get this configured in k8s
 
 ---
 
@@ -625,7 +645,7 @@ IFRS data migration should be moved to the init container style. Instead of exec
 The Dataset Information Service (DINS) is only relevant here because it consumes `FileInternallyRegistered` events, stores that info in its database, and provides the information to public via HTTP API. DINS needs to be updated to use the new `FileInternallyRegistered` event schema. The data in the database already uses different field names, so no migration should be necessary. However, the code verbiage should be updated because it currently uses `file_id` to refer to a file accession. So instances of `file_id` should be changed to `accession`.
 
 #### Work to be performed for the DINS
-- [ ] Get the updated `ghga-event-schemas` version and adapt DINS for changes to `FileInternallyRegistered`. 
+- Get the updated `ghga-event-schemas` version and adapt DINS for changes to `FileInternallyRegistered`. 
 
 ---
 
@@ -654,11 +674,11 @@ The `dcsPersistedEvents` collection needs the following changes to the `payload`
 Another note about the DCS migrations is that they should be moved to the init container style. Instead of executing `run_db_migrations()` as part of every entrypoint, the migrations should be run as their own command. 
 
 #### Work to be completed for the DCS
-- [ ] Get the updated `ghga-event-schemas` version
-- [ ] Adapt code for schema updates
-- [ ] Write migrations
-- [ ] Move migrations to own CLI command so they can be run as an init container
-  - [ ] Work with DevOps to get this configured in k8s
+- Get the updated `ghga-event-schemas` version
+- Adapt code for schema updates
+- Write migrations
+- Move migrations to own CLI command so they can be run as an init container
+  - Work with DevOps to get this configured in k8s
 
 ## Diagrams:
 
@@ -773,7 +793,7 @@ sequenceDiagram
     
     DHFS->>interrogation: List object IDs (polling)
     interrogation-->>DHFS:
-    DHFS->>FIS: GET (file IDs as query params)
+    DHFS->>FIS: POST (file IDs in request body)
     rect rgb(30, 30, 30, .8)
         loop For each file specified in query params
           FIS->>FIS: Retrieve FileUnderInterrogation
