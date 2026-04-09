@@ -333,19 +333,19 @@ Service instances poll this collection in a loop, atomically claiming work items
 
 ```mermaid
 flowchart TD
-    START(( )) -->|"Event received<br/>(new document)"| Q
+    START(( )) -->|"Event received<br>(new document)"| Q
 
-    Q["<b>Queued</b><br/>processor = None<br/>processed_at = None<br/>needs_reprocessing = False"]
-    P["<b>Processing</b><br/>processor = instance_id<br/>processed_at = None"]
-    D["<b>Done</b><br/>processor = None<br/>processed_at = timestamp<br/>needs_reprocessing = False"]
-    NR["<b>Needs Reprocessing (Done)</b><br/>processor = None<br/>processed_at = timestamp<br/>needs_reprocessing = True"]
-    NRI["<b>Needs Reprocessing</b><br/>processor = instance_id<br/>processed_at = None<br/>needs_reprocessing = True"]
+    Q["<b>Queued</b><br>processor = None<br>processed_at = None<br>needs_reprocessing = False"]
+    P["<b>Processing</b><br>processor = instance_id<br>processed_at = None"]
+    D["<b>Done</b><br>processor = None<br>processed_at = timestamp<br>needs_reprocessing = False"]
+    NR["<b>Needs Reprocessing (Done)</b><br>processor = None<br>processed_at = timestamp<br>needs_reprocessing = True"]
+    NRI["<b>Needs Reprocessing</b><br>processor = instance_id<br>processed_at = None<br>needs_reprocessing = True"]
 
-    Q -->|"Instance claims item<br/>(sets processor to self)"| P
-    P -->|"Processing completes<br/>(clears processor,<br/> sets processed_at)"| D
-    P -->|"New version arrives while processing<br/>(preserves processor, sets needs_reprocessing)"| NRI
-    D -->|"New version arrives<br/>after processing"| NR
-    NRI -->|"Processing finishes and<br/> remains marked for reprocessing"| NR
+    Q -->|"Instance claims item<br>(sets processor to self)"| P
+    P -->|"Processing completes<br>(clears processor,<br> sets processed_at)"| D
+    P -->|"New version arrives while processing<br>(preserves processor, sets needs_reprocessing)"| NRI
+    D -->|"New version arrives<br>after processing"| NR
+    NRI -->|"Processing finishes and<br> remains marked for reprocessing"| NR
     NR -->|"Claims for reprocessing (clears need_reprocessing and processed_at)"| P
     P -.-> |"Instance crashes and restarts processing on recovery."| P
 
