@@ -872,6 +872,8 @@ The returned `GrantWithBoxInfo` objects contain the following fields:
 - `user_title: str | None`
 - `box_title: str`
 - `box_description: str`
+- `box_state: UploadBoxState`
+- `box_version: int`
 
 ##### `DELETE /upload-grants/{grant_id}`
 
