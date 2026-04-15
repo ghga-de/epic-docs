@@ -904,7 +904,7 @@ This endpoint is called by the frontend file mapping tool at the end of the uplo
   - `description: str`
   - `storage_alias: str`
 - Response Body:
-  -  `box_id: UUID`
+  - `box_id: UUID`
 - Returns: 200 or error code
 
 This endpoint is used to create a new RDUB. If successful, returns the ID of the RDUB.
@@ -917,8 +917,8 @@ This endpoint is used to create a new RDUB. If successful, returns the ID of the
   - `limit?`: int
   - `state?`: UploadBoxState
 - Response body:
-    - `count: int`
-    - `boxes: list[ResearchDataUploadBox]`
+  - `count: int`
+  - `boxes: list[ResearchDataUploadBox]`
 - Returns: 200 or error code
 
 Fetches a list of RDUBs. Results are sorted first by locked status (unlocked followed by locked), then by most recently changed, then by box ID.
