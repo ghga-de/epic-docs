@@ -6,12 +6,12 @@ Epic planning and implementation follow the
 
 ## Scope
 ### Outline:
-The Upload Controller Service (UCS) currently has a verification and auth mechanisms at the start and end of the upload lifecycle through Work Order Tokens (WOTs) and checksum verification, but the window between those two points needs more control. For example, with the current implementation, a caller with a valid WOT can declare any number of arbitrarily large files, abandon sessions indefinitely, and spam the presigned URL endpoint. This epic addresses those problems by adding a layered set of guardrails to UCS and supporting infrastructure.
+The Upload Controller Service (UCS) currently has verification and auth mechanisms at the start and end of the upload lifecycle through Work Order Tokens (WOTs) and checksum verification, but the window between those two points needs more control. For example, with the current implementation, a caller with a valid WOT can declare any number of arbitrarily large files, abandon sessions indefinitely, and spam the presigned URL endpoint. This epic addresses those problems by adding a layered set of guardrails to UCS and supporting infrastructure.
 
 
 ### Included/Required:
 - **Upload Box size limits:** Data stewards will specify a maximum size in bytes when creating a new Research Data Upload Box. The box size will determine how many bytes may be uploaded across all files in their *unencrypted* state in the box. Because submitters must declare their total data size during contract negotiation with data stewards, a per-box aggregate cap is always enforceable — this is domain knowledge not currently codified anywhere in the backend. When a submitter requests to create a new FileUpload, look at in-progress (`state="init"`) uploads for the FileUploadBox and reject the request if the assigned box limit would be exceeded. When considering file sizes, it is the `decrypted_size` that counts, rather than the `encrypted_size`.
-- **Concurrent upload session cap per box:** Similar to the box limit, this would count the number of in-progress uploads and reject any requests to create new FileUploads if a configured limit would be crossed. Note that while box size limits are specific to the box, the concurrent uploads per box cap is applies uniformly to all boxes. This concurrent upload cap would prevent the style of abuse where thousands of uploads are opened simultaneously, but it does not prevent the scenario where many very small uploads are created and completed in rapid succession. Note that as it's currently implemented, the GHGA Connector only uploads files in sequence anyway, meaning this limit won't be hit unless the Connector is modified.
+- **Concurrent upload session cap per box:** Similar to the box limit, this would count the number of in-progress uploads and reject any requests to create new FileUploads if a configured limit would be crossed. Note that while box size limits are specific to the box, the concurrent uploads per box cap applies uniformly to all boxes. This concurrent upload cap would prevent the style of abuse where thousands of uploads are opened simultaneously, but it does not prevent the scenario where many very small uploads are created and completed in rapid succession. Note that as it's currently implemented, the GHGA Connector only uploads files in sequence anyway, meaning this limit won't be hit unless the Connector is modified.
 - **Stale session TTL with automated abort:** Track session activity via a KV store entry (key = `file_id`, value = timestamp of last activity), set on session creation and refreshed on every presigned URL issuance. Implement a periodic cleanup job that aborts S3 multipart uploads and marks `FileUpload` records as `cancelled` for sessions whose KV store entry has expired. Make this functionality accessible through a new entrypoint command.
 
 ### Optional:
@@ -32,12 +32,13 @@ No new user-facing flows are introduced. All changes should be transparent to su
 
 No new endpoints will be added. The following existing endpoints will gain new validation behavior and may return new error responses:
 
-**`POST /boxes/{box_id}/uploads`** — Initiate a new file upload session:
+**`POST /boxes/{box_id}/uploads`** -> Initiate a new file upload session:
 - Will return `400 Bad Request` (`PartCountLimitExceededError`) if the computed part count exceeds the S3 hard limit of 10,000 parts.
 - Will return `409 Conflict` (`BoxSizeLimitExceededError`) if adding this file's `decrypted_size` to the aggregate `decrypted_size` of all in-progress (`state="init"`) uploads for the box would exceed the box's assigned cap.
-**`GET /boxes/{box_id}/uploads/{file_id}/parts/{part_no}`** — Get a presigned URL for a part:
-- Will update the FileUpload's last-activity timestamp on every successful response
 - Will return `429 Too Many Requests` (`TooManyConcurrentUploadsError`) if the number of in-progress uploads for the box is already at the configured limit.
+
+**`GET /boxes/{box_id}/uploads/{file_id}/parts/{part_no}`** -> Get a presigned URL for a part:
+- Will update the FileUpload's last-activity timestamp on every successful response
 - *(optional)* Will return `429 Too Many Requests` (`PartUrlRateLimitError`) if the per-file token bucket is exhausted
 - *(optional)* Will call `S3ClientPort.list_parts()` for part `n-1` when `part_no > 1`; if the previous part's size exceeds the expected part size, will abort the multipart upload, mark the session `cancelled`, and return an upload-cancelled error to the caller
 
