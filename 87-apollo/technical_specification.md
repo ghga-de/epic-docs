@@ -192,12 +192,14 @@ The Accession entity stores all existing primary accessions. See also the sectio
 
 Attributes:
 
-- `id: str` - the primary accession number (PID)
+- `id: str` - the primary accession number (PID) (primary key)
 - `type: AccessionType` - the entity type referenced by this accession
 - `created: Date` - when the accession was created
 - `superseded_by_id: str | None` - if deprecated, a new primary accession
 
-Note: When we start introducing versioned accession numbers, we can consider splitting this into two entity models, one for holding the base accession numbers, and another one for holding the versioned ones.
+Note that the `type` is not part of the primary key, i.e. we assume it is already determined by the accession. We store it as additional information that might help with resolving or validating accessions.
+
+When we start introducing versioned accession numbers, we can consider splitting this into two entity models, one for holding the base accession numbers, and another one for holding the versioned ones.
 
 #### AltAccession
 
@@ -210,7 +212,21 @@ Attributes:
 - `type: AltAccessionType` - the type of alternative accession
 - `created: Date` - when the alternative accession was created
 
-Note that we also store the internal file IDs (UUIDs) as AltAccession entries with type `FILE_ID`.
+Note that we do not store the internal file IDs (UUIDs) using `AltAccession` and a special type, but using a separate model `FileAccession`.
+
+The corresponding collection should have a unique composite index on `id` and `type`.
+
+### FileAccession
+
+The FileAccession entity stores all existing File accessions together with their corresponding internal file IDs.
+
+Attributes:
+
+- `id: UUID4` - the internal file ID (primary key)
+- `pid: str` - the corresponding primary file accession number (foreign key)
+- `created: Date` - when the file accession was created
+
+The corresponding collection should have a unique index on `pid`.
 
 #### EmAccessionMap
 
@@ -296,7 +312,6 @@ The AccessionType enum holds the different types of primary accessions:
 The AltAccessionType enum holds the different kinds of alternative accessions:
 
 - `EGA` - EGA accession
-- `FILE_ID` - internal file id
 - `GHGA_LEGACY` - legacy GHGA accession (after switching to new PID schema)
 
 #### DatasetType
@@ -400,7 +415,7 @@ We will continue to use the legacy accession numbers until the new PID schema is
 
 In addition to GHGA accession numbers, which we also refer to as our primary (canonical) accessions, the accession registry should also keep track of alternative accessions (alt accessions) and resolve them to the corresponding primary accessions. For instance, the accession number under which a resource is archived in EGA should be stored as alternative accession. After switching to the new PID schema, the legacy accession numbers should also be stored as alternative accessions.
 
-The accession store shall also contain a mapping from file accessions to internal file IDs, using the same mechanism of alt accession references, with internal file IDs being a special type of alt accession.
+The accession store shall also contain a mapping from file accessions to internal file IDs.
 
 ### Authorization
 
@@ -786,8 +801,6 @@ Returns the Accession instance with the given primary accession number.
 
 Returns the AltAccession instance with the given alternative accession number and type.
 
-The type `FILE_ID` is not allowed here to avoid exposing internal numbers.
-
 #### Access Grants
 
 The following endpoints are for managing metadata access grants.
@@ -976,7 +989,7 @@ Ingests a filename mapping for the Research Data Upload Box with the given ID.
 
 As a safety measure, the SR must verify that all accessions in the mapping belong to the study with the specified PID and that all file IDs in the mapping belong to the box with the given ID, and respond with an error code 409 otherwise.
 
-The service should then upsert an `AltAccession` instance with type `FILE_ID` for all entries in the passed map, where `pid` is the key and `id` is the value in the map.
+The service should then upsert corresponding `FileAccession` instances for all entries in the passed map.
 
 The service should then republish the passed map for consumption by DINS and WPS.
 
