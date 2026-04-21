@@ -52,7 +52,7 @@ The following new config fields will be added to UCS config. All will have safe 
 
 ```python
 # Concurrent session cap
-max_concurrent_uploads_per_box: int = 5
+max_concurrent_uploads_per_box: int = 5        # This is a global limit for all boxes
 
 # Stale session TTL
 upload_session_ttl_hours: int = 72             # Sessions idle beyond this are aborted
@@ -60,7 +60,7 @@ cleanup_interval_minutes: int = 60             # How often the cleanup job runs
 
 # Presigned URL rate limiting (optional)
 max_part_urls_per_minute: int = 0      # 0 = disabled; token bucket refill rate
-part_url_burst_size: int = 10                  # Token bucket initial/max tokens
+max_url_buildup: int = 10                      # Token bucket initial/max tokens
 ```
 
 ## Additional Implementation Details:
@@ -129,14 +129,14 @@ For each configured `inbox` bucket (i.e. each data hub), do the following:
 
 ### UCS — Rate limiting on presigned URL issuance (Optional)
 
-If implemented, a per-file-upload token bucket will be applied in `UploadController.get_part_upload_url()` before the S3 presign call. Each bucket will start at `config.part_url_burst_size` tokens and will refill at `config.max_part_urls_per_minute / 60` tokens per second. On each URL request, one token will be consumed; if the bucket is empty, `PartUrlRateLimitError` will be raised. If `config.max_part_urls_per_minute == 0`, the feature will be disabled entirely.
+If implemented, a per-file-upload token bucket will be applied in `UploadController.get_part_upload_url()` before the S3 presign call. Each bucket will start at `config.max_url_buildup` tokens and will refill at `config.max_part_urls_per_minute / 60` tokens per second. On each URL request, one token will be consumed; if the bucket is empty, `PartUrlRateLimitError` will be raised. If `config.max_part_urls_per_minute == 0`, the feature will be disabled entirely.
 
 A new error class will be defined: `PartUrlRateLimitError`, translated in the HTTP response as `429 Too Many Requests` with the `retry-after` set to `config.max_part_urls_per_minute / 60`.
 
 `hexkit`'s `KeyValueStoreProtocol` (with the MongoDB provider) will be used to persist token bucket state keyed by `file_id`. `KeyValueStoreProtocol` will already be a required UCS dependency (added for the stale session TTL feature), so no additional wiring will be needed. Token bucket state will survive restarts and will be correctly shared across all UCS replicas.
 
 #### Work to be performed (optional):
-- [ ] Add `max_part_urls_per_minute` and `part_url_burst_size` to `Config`
+- [ ] Add `max_part_urls_per_minute` and `max_url_buildup` to `Config`
 - [ ] Add `PartUrlRateLimitError` to `UploadControllerPort`
 - [ ] Implement token bucket logic in `KeyValueStoreProtocol` with per-`file_id` keying
 - [ ] Apply the rate limit check in `get_part_upload_url()`; evict/expire stale bucket entries for terminal-state uploads
