@@ -16,7 +16,7 @@ The Upload Controller Service (UCS) currently has verification and auth mechanis
 
 ### Optional:
 - **Rate limiting on presigned URL issuance:** Apply a per-file-upload token bucket to the `GET .../parts/{part_no}` endpoint to cap the rate at which a single upload session can request presigned URLs. The token bucket can be held in-memory or backed by `hexkit`'s KV store / MongoDB provider.
-- **Verify part sizes retrospectively:** Call the S3 list_parts function for the previous part (`n-1`) when a URL is requested and aborts the upload if the part size is too large. When the user tries to request the next URL or to complete the upload, they will receive an error indicating the upload has been aborted (`state="cancelled"`).
+- **Verify part sizes retrospectively:** Call the S3 list_parts function for the previous part (`n-1`) when a URL is requested. If the part size exceeds the expected part size by some allowable buffer, UCS aborts the upload immediately. UCS then responds to the HTTP request with an error indicating the upload has been aborted (`state="cancelled"`). The GHGA Connector won't make subsequent requests and will display an appropriate message to the user.
   - This requires a modification to hexkit and adds up to one call for every presigned URL request. This would address the scenario where presigned URLs are used to upload large data quantities for every part, in excess of the actual data amount. Without this, the fallback is to reject the upload at completion time or clean up the stagnant multipart upload if the user intentionally abandons it.
 
 ### Not included:
