@@ -59,7 +59,7 @@ upload_session_ttl_hours: int = 72             # Sessions idle beyond this are a
 cleanup_interval_minutes: int = 60             # How often the cleanup job runs
 
 # Presigned URL rate limiting (optional)
-part_url_refill_interval_seconds: int = 0      # 0 = no rate limiting
+part_url_refill_interval_ms: int = 0           # 0 = no rate limiting
 max_url_buildup: int = 10                      # Token bucket initial/max tokens
 ```
 
@@ -129,14 +129,14 @@ For each configured `inbox` bucket (i.e. each data hub), do the following:
 
 ### UCS — Rate limiting on presigned URL issuance (Optional)
 
-If implemented, a per-file-upload token bucket will be applied in `UploadController.get_part_upload_url()` before the S3 presign call. Each bucket will start at `config.max_url_buildup` tokens. Once the count falls below maximum it will be incremented once every `config.part_url_refill_interval_seconds` seconds until it reaches the maximum again. On each URL request, one token will be consumed; if the bucket is empty, `PartUrlRateLimitError` will be raised. If `config.part_url_refill_interval_seconds == 0`, the feature will be disabled entirely, letting URLs be requested as fast as infra allows.
+If implemented, a per-file-upload token bucket will be applied in `UploadController.get_part_upload_url()` before the S3 presign call. Each bucket will start at `config.max_url_buildup` tokens. Once the count falls below maximum it will be incremented once every `config.part_url_refill_interval_ms` milliseconds until it reaches the maximum again. On each URL request, one token will be consumed; if the bucket is empty, `PartUrlRateLimitError` will be raised. If `config.part_url_refill_interval_ms == 0`, the feature will be disabled entirely, letting URLs be requested as fast as infra allows.
 
-A new error class will be defined: `PartUrlRateLimitError`, translated in the HTTP response as `429 Too Many Requests` with the `retry-after` set to `config.part_url_refill_interval_seconds`.
+A new error class will be defined: `PartUrlRateLimitError`, translated in the HTTP response as `429 Too Many Requests` with the `retry-after` set to `config.part_url_refill_interval_ms`.
 
 `hexkit`'s `KeyValueStoreProtocol` (with the MongoDB provider) will be used to persist token bucket state keyed by `file_id`. `KeyValueStoreProtocol` will already be a required UCS dependency (added for the stale session TTL feature), so no additional wiring will be needed. Token bucket state will survive restarts and will be correctly shared across all UCS replicas.
 
 #### Work to be performed (optional):
-- [ ] Add `part_url_refill_interval_seconds` and `max_url_buildup` to `Config`
+- [ ] Add `part_url_refill_interval_ms` and `max_url_buildup` to `Config`
 - [ ] Add `PartUrlRateLimitError` to `UploadControllerPort`
 - [ ] Implement token bucket logic in `KeyValueStoreProtocol` with per-`file_id` keying
 - [ ] Apply the rate limit check in `get_part_upload_url()`; evict/expire stale bucket entries for terminal-state uploads
