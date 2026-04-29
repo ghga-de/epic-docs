@@ -149,7 +149,7 @@ A new error class will be defined: `PartUrlRateLimitError`, translated in the HT
 
 > **Prerequisite:** This feature requires `hexkit`'s `ObjectStorageProtocol` to expose a `list_parts()` method.
 
-If implemented, a retrospective size check will be added in `UploadController.get_part_upload_url()` before the S3 presign call. When `part_no > 1`, `S3ClientPort.list_parts()` will be called to retrieve the metadata for part `n-1`. If the returned part size exceeds `FileUpload.part_size`, the multipart upload will be immediately aborted via `S3ClientPort.abort_multipart_upload()`, the `FileUpload` will be marked `cancelled`, and an upload-cancelled error will be raised so the caller receives a meaningful response. Subsequent requests for this upload will also fail with the cancelled-state error via the normal state check.
+If implemented, a retrospective size check will be added in `UploadController.get_part_upload_url()` before the S3 presign call. When `part_no > 1`, `S3ClientPort.list_parts()` will be called to retrieve the metadata for part `n-1`. If the returned part size exceeds `FileUpload.part_size`, the multipart upload will be immediately aborted via `S3ClientPort.abort_multipart_upload()`, the `FileUpload` will be marked `cancelled`, and an upload-cancelled error will be raised with the user receiving a 400 Bad Request status code. Subsequent requests for this upload will also fail with the cancelled-state error via the normal state check.
 
 This will add at most one additional S3 API call per presigned URL request (skipped for the first part). The fallback of detecting the oversize at completion time is already implemented, but would leave uploaded parts from abandoned uploads in S3 until the cleanup job runs.
 
