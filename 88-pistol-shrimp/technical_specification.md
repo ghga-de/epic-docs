@@ -131,7 +131,7 @@ For each configured `inbox` bucket (i.e. each data hub), do the following:
 
 If implemented, a per-file-upload token bucket will be applied in `UploadController.get_part_upload_url()` before the S3 presign call. Each bucket will start at `config.max_url_buildup` tokens. Once the count falls below maximum it will be incremented once every `config.part_url_refill_interval_ms` milliseconds until it reaches the maximum again. On each URL request, one token will be consumed; if the bucket is empty, `PartUrlRateLimitError` will be raised. If `config.part_url_refill_interval_ms == 0`, the feature will be disabled entirely, letting URLs be requested as fast as infra allows.
 
-A new error class will be defined: `PartUrlRateLimitError`, translated in the HTTP response as `429 Too Many Requests` with the `retry-after` set to `config.part_url_refill_interval_ms`.
+A new error class will be defined: `PartUrlRateLimitError`, translated in the HTTP response as `429 Too Many Requests` with the `retry-after` set to `config.part_url_refill_interval_ms` * 1000.
 
 `hexkit`'s `KeyValueStoreProtocol` (with the MongoDB provider) will be used to persist token bucket state keyed by `file_id`. `KeyValueStoreProtocol` will already be a required UCS dependency (added for the stale upload TTL feature), so no additional wiring will be needed. Token bucket state will survive restarts and will be correctly shared across all UCS replicas.
 
