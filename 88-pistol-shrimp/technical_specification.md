@@ -34,7 +34,7 @@ No new endpoints will be added. The following existing endpoints will gain new v
 
 **`POST /boxes/{box_id}/uploads`** -> Initiate a multipart upload for a new `FileUpload`:
 - Will return `400 Bad Request` (`PartCountLimitExceededError`) if the computed part count exceeds the S3 hard limit of 10,000 parts.
-- Will return `409 Conflict` (`BoxSizeLimitExceededError`) if adding this file's `decrypted_size` to the aggregate `decrypted_size` of all in-progress (`state="init"`) uploads for the box would exceed the box's assigned cap.
+- Will return `507 Insufficient Storage` (`BoxSizeLimitExceededError`) if adding this file's `decrypted_size` to the aggregate `decrypted_size` of all in-progress (`state="init"`) uploads for the box would exceed the box's assigned cap.
 - Will return `429 Too Many Requests` (`TooManyConcurrentUploadsError`) if the number of in-progress uploads for the box is already at the configured limit.
 
 **`GET /boxes/{box_id}/uploads/{file_id}/parts/{part_no}`** -> Get a presigned URL for a part:
@@ -75,7 +75,7 @@ In `UploadController.initiate_file_upload()` (`core/controller.py`), after the b
 
 The following new error classes will be defined on `UploadControllerPort`:
 - `PartCountLimitExceededError`: maps to 400 in HTTP error translation layer
-- `BoxSizeLimitExceededError`: maps to 409 in HTTP error translation layer
+- `BoxSizeLimitExceededError`: maps to 507 in HTTP error translation layer
 - `TooManyConcurrentUploadsError`: maps to 429 in HTTP error translation layer
 
 #### Work to be performed:
