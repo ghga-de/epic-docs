@@ -10,7 +10,8 @@ Epic planning and implementation follow the
 
 ### Outline:
 
-This epic aims to extend the `Dao` protocol in hexkit with batch methods that apply the existing  CRUD operation to several resources in a single call. The corresponding MongoDB provider will implement those methods and the in-memory DAO testing utility will be updated accordingly.
+This epic aims to extend the `Dao` protocol in hexkit with batch methods that apply the existing  CRUD operations to several resources in a single call. 
+The corresponding MongoDB provider will implement those methods and the in-memory DAO testing utility will be updated accordingly.
 
 This will allow services to perform common bulk operations using one database round-trip per resource batch instead of one round-trip per resource.
 
@@ -25,7 +26,8 @@ In addition, the existing index creation will be extended to allow for dynamic u
 
 ### Not included:
 
-- Automatic chunking of very large batches. Callers are expected to chunk themselves if a single call would exceed MongoDB's 16 MB request size; this can be added later if it proves necessary.
+- Automatic chunking of very large documents. 
+As with the current single resource variants, we don't chunk when we would exceed MongoDB's 16 MB request size.
 
 
 ## API Definitions
