@@ -83,7 +83,7 @@ This needs a small bit of investigation to check, if `collMod` is even supported
 
 ## Implementation Details
 
-New implementations for the protocol methods are added to `MongoDbDao` in and reuse the existing `translate_pymongo_errors` context manager together with `_dto_to_document` and `_document_to_dto`.
+New implementations for the protocol methods are added to `MongoDbDao` and reuse the existing `translate_pymongo_errors` context manager together with `_dto_to_document` and `_document_to_dto`.
 
 As we don't get atomic guarantees around the batch operations in MongoDB, operation results need to be checked for what actually succeeded and might have failed.
 For the non-delete operation this should return the document IDs for all failed operations inside a compound error encapsulating the corresponding error types (`ResourceAlreadyExistsError`/`ResourceNotFoundError`) from single resource variants.
