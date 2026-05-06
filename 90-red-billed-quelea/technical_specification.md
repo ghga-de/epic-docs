@@ -15,14 +15,11 @@ The corresponding MongoDB provider will implement those methods and the in-memor
 
 This will allow services to perform common bulk operations using one database round-trip per resource batch instead of one round-trip per resource.
 
-In addition, the existing index creation will be extended to allow for dynamic updates after creation.
-
 ### Included/Required:
 
 - Extend the `Dao` protocol in `hexkit.protocols.dao` with four new methods, `insert_many`, `update_many`, `upsert_many` and `delete_many`, keeping the protocol backend-agnostic.
 - Implement the four methods on the `MongoDbDao` provider in `hexkit.providers.mongodb.provider.dao`
 - Extend the in-memory DAO provider so that it supports the new methods with equivalent semantics.
-- Extend the `IndexBase` protocol and the corresponding Mongo DB provider `MongoDBIndex` to enable either updating or recreating indices. This needs a bit of research to figure out what the better generic option is that would also support updating Mongo DB TTL indices.
 
 ### Not included:
 
@@ -73,13 +70,6 @@ The easier solution would be to just reject the operation if duplicate IDs exist
 The existing single-resource methods remain unchanged and are not re-implemented in terms of the batch methods, though nothing precludes using the new methods with single item lists to achieve compatible behavior.
 
 An additional `BatchOperationError` will be introduced to wrap single failures within a batch operation, holding a dictionary of document IDs to error details, for handling by the caller.
-
-### Index updating/recreation
-
-Currently `_get_dao` on the provider calls `collection.create_index` without any error handling. 
-If a different index is provided after initial creation, this will fail due to mismatching fields on the index.
-This can be solved by migrations, but to also support dynamically updating TTL indices, either dropping and recreating or using the `collMod` command to modify the index in place would be a preferable option.
-This needs a small bit of investigation to check, if `collMod` is even supported for non-TTL indices and if so, which of the two options is the better/more general one.
 
 ## Implementation Details
 
