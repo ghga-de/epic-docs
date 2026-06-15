@@ -216,7 +216,7 @@ Note that we do not store the internal file IDs (UUIDs) using `AltAccession` and
 
 The corresponding collection should have a unique composite index on `id` and `type`.
 
-### FileAccession
+#### FileAccession
 
 The FileAccession entity stores all existing File accessions together with their corresponding internal file IDs.
 
