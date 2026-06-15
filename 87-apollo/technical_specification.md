@@ -222,11 +222,13 @@ The FileAccession entity stores all existing File accessions together with their
 
 Attributes:
 
-- `id: UUID4` - the internal file ID (primary key)
-- `pid: str` - the corresponding primary file accession number (foreign key)
+- `pid: str` - the corresponding primary file accession number (primary key)
+- `file_id: UUID4 | None` - the internal file ID (if mapped)
+- `study_id: str | None` - the corresponding study ID (if known)
 - `created: Date` - when the file accession was created
+- `mapped: Date | None` - when the file accession was mapped
 
-The corresponding collection should have a unique index on `pid`.
+The FileAccessions should never be updated other then adding a `file_id` and `mapped` date or removing the `study_id` when the file is completely removed from the study.
 
 #### EmAccessionMap
 
