@@ -222,13 +222,15 @@ The FileAccession entity stores all existing File accessions together with their
 
 Attributes:
 
-- `pid: str` - the corresponding primary file accession number (primary key)
-- `file_id: UUID4 | None` - the internal file ID (if mapped)
+- `pid: str` - the primary file accession number (primary key)
+- `file_id: UUID4 | None` - the corresponding internal file ID (if mapped)
 - `study_id: str | None` - the corresponding study ID (if known)
 - `created: Date` - when the file accession was created
 - `mapped: Date | None` - when the file accession was mapped
 
-The FileAccessions should never be updated other then adding a `file_id` and `mapped` date or removing the `study_id` when the file is completely removed from the study.
+The FileAccessions should never be updated other than adding a `file_id` and `mapped` date to an unmapped entry or removing the `study_id` when the file is completely removed from the study.
+
+They should be sent as `FileAccessionMapping` event in adapted form via the outbox mechanism when the `file_id` is set.
 
 #### EmAccessionMap
 
@@ -288,6 +290,7 @@ Attributes:
 - `file_upload_box_state: UploadBoxState` - current state of the file upload box
 - `file_count: int` - number of files in the box
 - `size: int` - the total size of all files in the box
+- `max_size: int` - the maximum number of bytes that can be uploaded to the box
 - `storage_alias: str` - object storage alias to use for uploads
 
 ### Enums
