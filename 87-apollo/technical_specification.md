@@ -66,7 +66,7 @@ Attributes:
 - `status: StudyStatus` - the current status of the study (see below)
 - `created: Date` - when the entry was first created
 - `created_by: UUID` - the id of the user who uploaded the study
-- `approved: Date` - when the study was approved
+- `approved: Date | None` - when the study was approved
 - `approved_by: UUID | None` - the id of the user who approved the study
 - `superseded_by_id: str` - if deprecated, the PID of a newer study
 - `has_em: bool` - computed field: True if EM has been uploaded already
