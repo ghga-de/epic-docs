@@ -504,6 +504,14 @@ If not requested by a data steward, only returns studies that are either public 
 
 The response also returns the computed fields. The user related fields should only be returned if the request is made by a data steward.
 
+##### `GET /studies/{id}/file-ids`
+
+- Auth: internal auth token with data steward role
+- Response Body: `dict[str, UUID]`
+- Returns: 200 or error code (particularly, 403 or 404)
+
+The response returns the mapping from all file accessions of the study with th given ID to their corresponding file IDs, which can be null if the file is still unmapped.
+
 ##### `PATCH /studies/{id}`
 
 - Auth: internal auth token with data steward role
